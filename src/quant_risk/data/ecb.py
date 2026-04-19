@@ -32,7 +32,7 @@ GOV_MATURITIES = {
 
 
 class ECBClient(CentralBankClient):
-   """
+    """
     Client for the ECB Statistical Data Warehouse REST API.
 
     Available data:
