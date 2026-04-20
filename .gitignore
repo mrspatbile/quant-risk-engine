@@ -1,10 +1,11 @@
 .venv/
+.env
 __pycache__/
 *.pyc
 *.pyo
 .ipynb_checkpoints/
 data/raw/
-.env
+data/processed/
 *.egg-info/
 dist/
 .DS_Store

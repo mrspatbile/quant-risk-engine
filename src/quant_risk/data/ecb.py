@@ -147,7 +147,8 @@ class ECBClient(CentralBankClient):
         return self._parse_observations(data)
 
     def get_spot_rate(self, maturity: str = "10Y",
-                      last_n: int = 252) -> pd.Series:
+                      last_n: int = 252,
+                      rating: str = "AAA") -> pd.Series:
         """
         ECB euro area government bond spot rate at a given maturity.
 
@@ -157,6 +158,9 @@ class ECBClient(CentralBankClient):
             One of 3M, 6M, 1Y, 2Y, 5Y, 10Y, 20Y, 30Y
         last_n : int
             Number of observations to fetch.
+        rating : str
+            'AAA' for triple-A rated issuers only (G_N_A),
+            'ALL' for all issuers all ratings (G_N_C).
 
         Returns
         -------
@@ -167,17 +171,27 @@ class ECBClient(CentralBankClient):
                 f"Maturity '{maturity}' not available. "
                 f"Choose from {list(GOV_MATURITIES.keys())}"
             )
+        instrument = "G_N_A" if rating == "AAA" else "G_N_C"
         data = self._get(
             dataset="YC",
-            series_key=f"B.U2.EUR.4F.G_N_A.SV_C_YM.{GOV_MATURITIES[maturity].code}",
+            series_key=f"B.U2.EUR.4F.{instrument}.SV_C_YM.{GOV_MATURITIES[maturity].code}",
             params={"format": "jsondata", "lastNObservations": last_n},
         )
         return self._parse_observations(data)
 
-    def get_full_curve(self, last_n: int = 5) -> pd.DataFrame:
+    def get_full_curve(self, last_n: int = 5,
+                       rating: str = "AAA") -> pd.DataFrame:
         """
         Full euro area government spot curve across all
         standard maturities.
+
+        Parameters
+        ----------
+        last_n : int
+            Number of observations to fetch.
+        rating : str
+            'AAA' for triple-A rated issuers only (G_N_A),
+            'ALL' for all issuers all ratings (G_N_C).
 
         Returns
         -------
@@ -187,25 +201,37 @@ class ECBClient(CentralBankClient):
         """
         series = {}
         for maturity in GOV_MATURITIES:
-            series[maturity] = self.get_spot_rate(maturity, last_n=last_n)
+            series[maturity] = self.get_spot_rate(
+                maturity, last_n=last_n, rating=rating
+            )
         return pd.DataFrame(series)
 
-    def get_nss_parameters(self, last_n: int = 5) -> pd.DataFrame:
+    def get_nss_parameters(self, last_n: int = 5, 
+                        rating: str = "AAA") -> pd.DataFrame:
         """
         ECB published Nelson-Siegel-Svensson parameters.
+
+        Parameters
+        ----------
+        last_n : int
+            Number of observations to fetch.
+        rating : str
+            'AAA' for triple-A rated issuers only (G_N_A),
+            'ALL' for all issuers all ratings (G_N_C).
 
         Returns
         -------
         pd.DataFrame with columns [beta0, beta1, beta2, beta3, tau1, tau2]
         indexed by date.
         """
+        instrument = "G_N_A" if rating == "AAA" else "G_N_C"
         param_codes = {
-            "beta0": "B.U2.EUR.4F.G_N_A.SV_C_YM.BETA0",
-            "beta1": "B.U2.EUR.4F.G_N_A.SV_C_YM.BETA1",
-            "beta2": "B.U2.EUR.4F.G_N_A.SV_C_YM.BETA2",
-            "beta3": "B.U2.EUR.4F.G_N_A.SV_C_YM.BETA3",
-            "tau1":  "B.U2.EUR.4F.G_N_A.SV_C_YM.TAU1",
-            "tau2":  "B.U2.EUR.4F.G_N_A.SV_C_YM.TAU2",
+            "beta0": f"B.U2.EUR.4F.{instrument}.SV_C_YM.BETA0",
+            "beta1": f"B.U2.EUR.4F.{instrument}.SV_C_YM.BETA1",
+            "beta2": f"B.U2.EUR.4F.{instrument}.SV_C_YM.BETA2",
+            "beta3": f"B.U2.EUR.4F.{instrument}.SV_C_YM.BETA3",
+            "tau1":  f"B.U2.EUR.4F.{instrument}.SV_C_YM.TAU1",
+            "tau2":  f"B.U2.EUR.4F.{instrument}.SV_C_YM.TAU2",
         }
         series = {}
         for name, code in param_codes.items():
