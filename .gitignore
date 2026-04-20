@@ -8,3 +8,4 @@ data/raw/
 *.egg-info/
 dist/
 .DS_Store
+notebooks/scratch_cells.ipynb
