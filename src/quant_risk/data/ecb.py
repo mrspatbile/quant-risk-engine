@@ -65,15 +65,17 @@ GOV_MATURITIES = {
 }
 
 MMSR_OIS_BUCKETS = {
-    "1M"  : RateBucket(code="FC", maturity=1/12),
-    "2M"  : RateBucket(code="FD", maturity=2/12),
-    "3M"  : RateBucket(code="FE", maturity=3/12),
-    "6M"  : RateBucket(code="FF", maturity=6/12),
-    "9M"  : RateBucket(code="FG", maturity=9/12),
-    "2Y"  : RateBucket(code="FI", maturity=2.0),
-    "3Y"  : RateBucket(code="FJ", maturity=3.0),
-    "5Y"  : RateBucket(code="FK", maturity=5.0),
-    "10Y" : RateBucket(code="FM", maturity=10.0),
+    "1M"   : RateBucket(code="FC", maturity=1/12),
+    "2M"   : RateBucket(code="FD", maturity=2/12),
+    "3M"   : RateBucket(code="FE", maturity=3/12),
+    "6M"   : RateBucket(code="FF", maturity=6/12),
+    "9M"   : RateBucket(code="FG", maturity=9/12),
+    "12M"  : RateBucket(code="FH", maturity=1.0),
+    "2Y"   : RateBucket(code="FI", maturity=2.0),
+    "3Y"   : RateBucket(code="FJ", maturity=3.0),
+    "5Y"   : RateBucket(code="FK", maturity=5.0),
+    "10Y"  : RateBucket(code="FL", maturity=10.0),
+    "10Y+" : RateBucket(code="FM", maturity=15.0),
 }
 
 
