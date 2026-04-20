@@ -9,4 +9,3 @@ data/processed/
 *.egg-info/
 dist/
 .DS_Store
-notebooks/scratch_cells.ipynb
