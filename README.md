@@ -25,8 +25,8 @@ configs/            # Market configuration files
 |----------|--------|-------------|
 | 01_nss_ecb.ipynb | Done | NSS curve from ECB parameters -- AAA government curve, parameter sensitivity, historical analysis |
 | 02_bootstrapping_ois.ipynb | Done | OIS curve bootstrapping from ECB MMSR data via QuantLib -- interpolation comparison, OIS vs government spread |
-| 03_asset_pricing.ipynb | Planned | Bond pricing, IR swaps, FX forwards, BSM options, vol surface |
-| 04_irrbb_eve.ipynb | Planned | EBA/RTS/2022/10 shock scenarios applied to OIS curve, EVE supervisory outlier test |
+| 03_irrbb_eve.ipynb | In progress | EBA/RTS/2022/10 shock scenarios applied to OIS curve, EVE supervisory outlier test |
+| 04_asset_pricing.ipynb | Planned | Bond pricing, IR swaps, FX forwards, BSM options, vol surface |
 
 ### Module 2 -- Simulation Engine
 | Notebook | Status | Description |
