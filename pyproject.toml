@@ -19,6 +19,7 @@ dependencies = [
     "yfinance",
     "pandas-datareader",
     "streamlit",
+    "QuantLib",
 ]
 
 [tool.setuptools.packages.find]
