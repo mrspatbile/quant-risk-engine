@@ -120,3 +120,34 @@ class FedClient(CentralBankClient):
         maturities = [k for k in FRED_SERIES if k != "SOFR"]
         series = {m: self.get_spot_rate(m, last_n=last_n) for m in maturities}
         return pd.DataFrame(series)
+        
+    def get_fx_spot(self, pair: str = "EURUSD", last_n: int = 5) -> pd.Series:
+        """
+        FX spot rate from FRED.
+
+        Parameters
+        ----------
+        pair : str
+            Currency pair. Supported: 'EURUSD', 'GBPUSD', 'USDJPY',
+            'USDCHF', 'USDBRL'
+        last_n : int
+            Number of observations to fetch.
+
+        Returns
+        -------
+        pd.Series indexed by date string, values as FX rate.
+        """
+        fx_series = {
+            "EURUSD": "DEXUSEU",   # USD per EUR
+            "GBPUSD": "DEXUSUK",   # USD per GBP
+            "USDJPY": "DEXJPUS",   # JPY per USD
+            "USDCHF": "DEXSZUS",   # CHF per USD
+            "USDBRL": "DEXBZUS",   # BRL per USD
+        }
+        series_id = fx_series.get(pair.upper())
+        if series_id is None:
+            raise ValueError(
+                f"Pair '{pair}' not supported. "
+                f"Choose from {list(fx_series.keys())}"
+            )
+        return self._get_series(series_id, last_n)
