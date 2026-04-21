@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import QuantLib as ql
 import os
+from quant_risk.config import FRED_API_KEY, config
 
 from quant_risk.curves.ois import OISCurve
 from quant_risk.curves.nss import NSSCurve
@@ -22,3 +23,18 @@ nss_curve = NSSCurve.from_ecb(rating="AAA")
 
 print(ois_curve.describe())
 print(nss_curve.describe())
+
+# -----------------------------------------------------------------------
+# QuantLib valuation date from OIS curve
+# -----------------------------------------------------------------------
+
+val_parts      = ois_curve.valuation_date.split("-")
+valuation_date = ql.Date(
+    int(val_parts[2]), int(val_parts[1]), int(val_parts[0])
+)
+ql.Settings.instance().evaluationDate = valuation_date
+calendar       = ql.TARGET()
+
+print(f"Valuation date : {valuation_date}")
+print(f"Calendar       : TARGET")
+

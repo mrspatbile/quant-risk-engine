@@ -83,3 +83,72 @@ class TestBond:
     def test_cash_flows_coupons(self, bund):
         cf = bund.cash_flows()
         assert (cf["type"] == "coupon").sum() > 0
+
+
+# ------------------------------------------------------------------
+# IRSwap tests
+# ------------------------------------------------------------------
+
+from quant_risk.instruments.swap import IRSwap
+
+@pytest.fixture
+def swap():
+    return IRSwap(
+        notional       = 10_000_000,
+        maturity_years = 5,
+        fixed_rate     = 2.50,
+        valuation_date = "2026-03-24",
+    )
+
+class TestIRSwap:
+
+    def test_describe(self, swap):
+        assert "Payer" in swap.describe()
+        assert "EUR" in swap.describe()
+
+    def test_currency(self, swap):
+        assert swap.currency == "EUR"
+
+    def test_notional(self, swap):
+        assert swap.notional == 10_000_000
+
+    def test_par_rate_positive(self, swap, curve):
+        assert swap.par_rate(curve) > 0
+
+    def test_npv_at_par_is_zero(self, curve):
+        par = IRSwap(
+            notional       = 10_000_000,
+            maturity_years = 5,
+            fixed_rate     = 2.4889,
+            valuation_date = "2026-03-24",
+        )
+        assert abs(par.price(curve)["npv"]) < 100
+
+    def test_price_keys(self, swap, curve):
+        p = swap.price(curve)
+        assert all(k in p for k in [
+            "npv", "fixed_leg_npv", "float_leg_npv",
+            "par_rate", "fixed_rate"
+        ])
+
+    def test_fixed_plus_float_equals_npv(self, swap, curve):
+        p = swap.price(curve)
+        assert abs(p["fixed_leg_npv"] + p["float_leg_npv"] - p["npv"]) < 1
+
+    def test_dv01_negative_for_payer(self, swap, curve):
+        # payer swap loses value when rates rise
+        assert swap.dv01(curve) < 0
+
+    def test_dv01_positive_for_receiver(self, curve):
+        receiver = IRSwap(
+            notional       = 10_000_000,
+            maturity_years = 5,
+            fixed_rate     = 2.50,
+            valuation_date = "2026-03-24",
+            pay_fixed      = False,
+        )
+        assert receiver.dv01(curve) > 0
+
+    def test_key_rate_dv01_5y_dominates(self, swap, curve):
+        kr = swap.key_rate_dv01(curve)
+        assert abs(kr["5Y"]) == max(abs(v) for v in kr.values())
