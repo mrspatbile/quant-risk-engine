@@ -1,63 +1,200 @@
 # Quant Risk Engine
 
-A Python-based quantitative risk engine covering yield curve construction,
-asset pricing, simulation, and regulatory risk KPIs for banks and funds
-under European regulation.
+A Python quantitative risk engine built on QuantLib, covering the full
+spectrum of market risk, regulatory capital, and fund risk management
+relevant to EU banks and asset managers.
 
-Built as a portfolio project demonstrating production-grade quant risk
-skills relevant to Luxembourg and EU financial institutions.
+The engine implements live market data pipelines (ECB, FRED), QuantLib-based
+curve construction and instrument pricing, and regulatory frameworks across
+IRRBB, FRTB, AIFMD II, and IFRS 13 -- from raw rate fixings to supervisory
+outlier tests and Annex IV reporting. An interactive Streamlit dashboard
+provides fund liquidity risk analysis across multiple AIF strategies.
+
+**Stack:** Python 3.13 | QuantLib 1.42 | Streamlit | ECB SDW | FRED API  
+**Status:** Actively developed -- Sprint 5 in progress
 
 ---
 
-## Structure
+## Scope
 
-notebooks/          # Exploratory prototypes by module
-src/quant_risk/     # OOP risk engine (VS Code, version controlled)
-dashboard/          # Streamlit risk dashboards
-tests/              # Unit tests
-data/               # Raw and processed market data
-configs/            # Market configuration files
+| Domain | Status |
+|--------|--------|
+| Yield curve construction -- OIS bootstrapping, NSS | Done |
+| Instrument pricing -- bonds, IR swaps, FX forwards, options | Done / In progress |
+| IRRBB -- EVE and NII supervisory outlier tests | Done |
+| FRTB SA -- GIRR delta, key rate DV01 | Done |
+| Fund liquidity risk -- AIFMD II, Annex IV, LMTs | Done |
+| ETF liquidity stress -- creation/redemption mechanism, AP arbitrage breakdown | In progress |
+| Monte Carlo + short rate models | Planned -- Sprint 6/7 |
+| XVA -- CVA, FVA, MVA + neural network approximator | Planned -- Sprint 8 |
+| Credit risk -- IRB, IFRS 9 ECL | Planned -- Module 7 |
 
-## Modules
+---
 
-### Module 1 -- Yield Curves and Asset Pricing
-| Notebook | Status | Description |
-|----------|--------|-------------|
-| 01_nss_ecb.ipynb | Done | NSS curve from ECB parameters -- AAA government curve, parameter sensitivity, historical analysis |
-| 02_bootstrapping_ois.ipynb | Done | OIS curve bootstrapping from ECB MMSR data via QuantLib -- interpolation comparison, OIS vs government spread |
-| 03_irrbb_eve.ipynb | In progress | EBA/RTS/2022/10 shock scenarios applied to OIS curve, EVE supervisory outlier test |
-| 04_asset_pricing.ipynb | Planned | Bond pricing, IR swaps, FX forwards, BSM options, vol surface |
+## Project Structure
 
-### Module 2 -- Simulation Engine
-| Notebook | Status | Description |
-|----------|--------|-------------|
-| 01_short_rate_models.ipynb | Planned | Vasicek, CIR, Hull-White calibration and path generation |
-| 02_hjm.ipynb | Planned | Heath-Jarrow-Morton forward rate dynamics |
-| 03_monte_carlo.ipynb | Planned | MC path generation, variance reduction, convergence |
-| 04_xva.ipynb | Planned | CVA, DVA, FVA using simulated exposure profiles |
+```
+quant-risk-engine/
+├── src/quant_risk/
+│   ├── data/           # Market data clients -- ECB, Fed, BCB
+│   ├── curves/         # OISCurve, NSSCurve -- QuantLib wrappers
+│   ├── instruments/    # Bond, IRSwap, FXForward, VanillaOption
+│   └── risk/           # Risk calculators (in progress)
+├── notebooks/
+│   ├── 01_yield_curves/
+│   ├── 02_asset_pricing/
+│   ├── 03_simulations/
+│   ├── 04_bank_risk/
+│   └── 05_fund_risk/
+├── apps/
+│   ├── fund_liquidity/ # Streamlit dashboard -- AIFMD liquidity risk
+│   └── etf_liquidity/  # Streamlit dashboard -- ETF liquidity stress (in progress)
+├── tests/              # Unit tests -- all passing
+└── data/
+    └── processed/      # Bootstrapped curves, fund position data
+```
 
-### Module 3 -- Bank Risk KPIs
-| Notebook | Status | Description |
-|----------|--------|-------------|
-| 01_icaap.ipynb | Planned | Economic capital, RAROC, concentration risk |
-| 02_ilaap.ipynb | Planned | LCR, NSFR, survival horizon |
-| 03_frtb_sa.ipynb | Planned | FRTB standardised approach, sensitivity-based capital |
+---
 
-### Module 4 -- Fund Risk KPIs
-| Notebook | Status | Description |
-|----------|--------|-------------|
-| 01_aifm.ipynb | Planned | AIFMD II liquidity stress testing, redemption coverage |
-| 02_ucits.ipynb | Planned | UCITS VaR approach, global exposure, commitment method |
-| 03_priips.ipynb | Planned | PRIIPs SRI calculation, performance scenarios |
+## Module 1 -- Yield Curves
 
-### Module 5 -- OOP Risk Engine and Dashboard
-| Component | Status | Description |
-|-----------|--------|-------------|
-| src/quant_risk/data/ | In progress | ECB, Fed, BCB market data clients |
-| src/quant_risk/curves/ | Planned | Curve classes wrapping QuantLib |
-| src/quant_risk/instruments/ | Planned | Bond, swap, option pricers |
-| src/quant_risk/risk/ | Planned | VaR, ES, DV01, EVE calculators |
-| dashboard/ | Planned | Streamlit curve viewer, risk report |
+| Notebook | Description |
+|----------|-------------|
+| 01_nss_ecb.ipynb | ECB AAA government curve -- Nelson-Siegel-Svensson, DV01, historical analysis |
+| 02_bootstrapping_ois.ipynb | OIS curve bootstrapping from ECB MMSR data via QuantLib PiecewiseNaturalLogCubicDiscount -- interpolation comparison, OIS vs NSS spread |
+| 03_irrbb_eve.ipynb | EBA/RTS/2022/10 -- six prescribed shock scenarios, EVE SOT, NII SOT, repricing gap, dashboard |
+
+**OOP:** `OISCurve`, `NSSCurve` -- abstract base class, dependency injection, full test coverage.
+
+---
+
+## Module 2 -- Asset Pricing
+
+| Notebook | Description |
+|----------|-------------|
+| 01_bonds.ipynb | Bund pricing, z-spread, key rate DV01, FRTB GIRR context |
+| 02_swaps.ipynb | Multi-curve IRS (OIS + EURIBOR), par rate, MTM lifecycle, DV01, leg decomposition |
+| 03_fx_forwards.ipynb | CIP, EUR/USD forward curve, delta FX, delta IR, hedge effectiveness, cross-currency basis |
+| 04_options_vol.ipynb | BSM, implied vol, smile, SVI -- in progress |
+| carry_trade.ipynb | Carry trade risk analysis -- in progress |
+| futures.ipynb | Futures pricing, cost of carry, basis -- in progress |
+
+**OOP:** `Bond`, `IRSwap`, `FXForward`, `VanillaOption` -- all inherit from `Instrument` ABC.
+
+**Regulatory context:** EMIR (OIS discounting), FRTB SA GIRR delta, IFRS 13 fair value levels.
+
+---
+
+## Module 6 -- ETF Liquidity Stress
+
+ETF-specific liquidity risk analysis covering the creation/redemption mechanism
+under market stress. Covers four ETF types common in the Luxembourg UCITS market:
+
+| ETF | Underlying | Key risk |
+|-----|-----------|---------|
+| Equity ETF | EuroStoxx 50 large caps | Bid-ask widening, tracking error under stress |
+| Fixed Income ETF | EUR IG corporate bonds | Underlying illiquidity drives premium/discount |
+| Smart Beta ETF | Factor -- value + low vol | Mixed liquidity profile, rebalancing risk |
+| Commodity ETF | Physically backed / swap-based | Collateral liquidity, roll cost |
+
+**Metrics:** tracking error, tracking difference, premium/discount to NAV,
+authorised participant arbitrage cost, creation/redemption breakdown indicator.
+
+**Regulatory basis:** ESMA guidelines on ETF liquidity under stressed conditions,
+UCITS Directive 2009/65/EC, PRIIPs Regulation 1286/2014.
+
+**App:**  -- Streamlit dashboard (in progress).
+
+---
+
+## Module 3 -- Simulations
+
+Planned -- Sprint 6/7/8.
+
+| Notebook | Description |
+|----------|-------------|
+| Vasicek, Hull-White, CIR | Short rate model calibration and path generation |
+| Monte Carlo | Path generation, variance reduction, convergence |
+| XVA | CVA, FVA, MVA using simulated exposure profiles |
+| Neural network XVA | Deep XVA -- NN approximation of Expected Exposure |
+
+---
+
+## Module 4 -- Bank Risk
+
+| Document | Description |
+|----------|-------------|
+| bank_reg.md | Regulation reference -- Basel IV, CRR3, FRTB, IRRBB, ICAAP, ILAAP, XVA |
+
+FRTB SA and IRRBB implemented in Module 1/2 notebooks. Dedicated bank risk
+dashboard planned.
+
+---
+
+## Module 5 -- Fund Risk
+
+| Notebook / App | Description |
+|----------------|-------------|
+| fund_reg.md | Regulation reference -- AIFMD, AIFMD II, UCITS, IFRS 13, Luxembourg vehicles |
+| liquidity_fund_risk.ipynb | Full AIFMD liquidity risk framework -- bucketing, LCR, stress testing, Annex IV, LMT simulation |
+| apps/fund_liquidity/ | Streamlit dashboard -- interactive liquidity risk analysis for four fund types |
+
+**Fund types covered:** Multi-asset AIF, Credit AIF (IG/HY/CLO/private credit),
+Leveraged AIF (long/short equity with derivatives), Real Estate AIF (REITs + direct property).
+
+**LMT simulation:** Redemption gate with contagion multiplier, swing pricing,
+suspension trigger -- liquid sleeve depletion modelled explicitly per
+ESMA34-671404336-1364 board-decision framework.
+
+**Regulatory basis:** Delegated Regulation 231/2013, AIFMD II Directive 2024/927/EU,
+ESMA34-671404336-1364 (Guidelines on LMTs, April 2025), ESMA/2013/232 (Annex IV).
+
+---
+
+## Regulation Coverage
+
+| Regulation | Where implemented |
+|------------|------------------|
+| EBA/GL/2022/14 | IRRBB notebook -- six shock scenarios |
+| EBA/RTS/2022/09 | IRRBB -- OIS discounting, 19 maturity buckets |
+| EBA/RTS/2022/10 | EVE SOT 15%, NII SOT 5% |
+| CRR3 / FRTB SA | Bond and swap notebooks -- GIRR delta, key rate DV01 |
+| EMIR | OIS discounting throughout -- collateralised derivatives |
+| IFRS 13 | Fair value levels -- FX forwards notebook, fund_reg.md |
+| AIFMD (2011/61/EU) | Fund liquidity notebook and dashboard |
+| Delegated Reg. 231/2013 | Liquidity bucketing, stress testing, Annex IV |
+| AIFMD II (2024/927/EU) | LMT simulation -- gate, swing, suspension |
+| ESMA34-671404336-1364 | Suspension trigger calibration |
+| Basel IV / CRR3 | bank_reg.md reference |
+| ICAAP / ILAAP | bank_reg.md reference |
+
+---
+
+## OOP Engine
+
+```
+src/quant_risk/
+├── data/
+│   ├── base.py         # CentralBankClient ABC
+│   ├── ecb.py          # ECBClient -- ESTR, NSS, MMSR, FX
+│   ├── fed.py          # FedClient -- SOFR, Treasury CMT, EUR/USD
+│   └── bcb.py          # BCBClient -- CDI, Selic
+├── curves/
+│   ├── base.py         # DiscountCurve ABC
+│   ├── ois.py          # OISCurve -- QuantLib bootstrapping
+│   └── nss.py          # NSSCurve -- Nelson-Siegel-Svensson
+└── instruments/
+    ├── base.py         # Instrument ABC
+    ├── bond.py         # Bond -- OIS discounting, z-spread, key rate DV01
+    ├── swap.py         # IRSwap -- multi-curve, par rate, MTM, DV01
+    ├── fx_forward.py   # FXForward -- CIP, NPV, delta FX/IR
+    └── option.py       # VanillaOption -- BSM, implied vol (in progress)
+```
+
+**Design principles:** abstract base classes, dependency injection, no global state,
+QuantLib global clock managed explicitly.
+
+**Tests:** 23+ tests, all passing.
 
 ---
 
@@ -65,55 +202,33 @@ configs/            # Market configuration files
 
 | Source | Data | Access |
 |--------|------|--------|
-| ECB SDW API | ESTR fixings, NSS parameters, MMSR OIS rates, government spot rates | Free, no key |
-| ECB EST dataset | ESTR daily fixing | Free, no key |
-| ECB MMSR dataset | OIS weighted average rates by maturity bucket | Free, no key |
-| Eurex | ESTR futures settlement prices | Free, manual download |
-| FRED API | SOFR, US Treasury rates | Free, key required |
-| BCB API | CDI, Selic, IPCA | Free, no key |
-| yfinance | Equity options, ETF prices | Free, rate limited |
-
----
-
-## Regulation Coverage
-
-| Regulation | Module | Description |
-|------------|--------|-------------|
-| EBA/GL/2022/14 | Module 1, 3 | IRRBB -- six prescribed shock scenarios, EVE and NII supervisory outlier test |
-| EBA/RTS/2022/09 | Module 1, 3 | IRRBB standardised approach -- OIS discounting, cash flow bucketing |
-| EBA/RTS/2022/10 | Module 1, 3 | IRRBB supervisory outlier test -- 15% Tier 1 threshold |
-| CRR3 / FRTB | Module 3 | Market risk capital -- SA sensitivities, ES 97.5% |
-| AIFMD II | Module 4 | Liquidity stress testing, redemption coverage ratio |
-| UCITS | Module 4 | Global exposure, VaR approach, commitment method |
-| PRIIPs | Module 4 | SRI, performance scenarios, transaction costs |
-| EMIR | Module 2 | OIS discounting for collateralised derivatives |
-| IFRS 9 | Module 3 | ECL, fair value hierarchy |
+| ECB SDW API | ESTR, NSS parameters, MMSR OIS rates, government rates, FX | Free, no key |
+| FRED API | SOFR, US Treasury CMT, EUR/USD spot | Free, API key required |
+| BCB API | CDI, Selic, spot rates | Free, no key |
 
 ---
 
 ## Setup
 
 ```bash
-git clone https://github.com/yourusername/quant-risk-engine.git
+git clone https://github.com/mrspatbile/quant-risk-engine.git
 cd quant-risk-engine
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
+cp .env.example .env        # add FRED_API_KEY
 jupyter lab
+```
+
+**Run the fund liquidity dashboard:**
+
+```bash
+streamlit run apps/fund_liquidity/app.py
 ```
 
 ---
 
-## Stack
-
-- Python 3.13
-- QuantLib 1.42 -- curve bootstrapping, instrument pricing
-- NumPy, SciPy, pandas -- numerical computation
-- Matplotlib, Plotly -- visualisation
-- Streamlit -- dashboard
-- ECB SDW, FRED, BCB -- market data
-
----
-
-*Work in progress -- actively developed.*
+*Regulation references: CRR3 (EU 2024/1623), EBA/GL/2022/14, EBA/RTS/2022/09,*
+*EBA/RTS/2022/10, BCBS d457, EMIR (EU 648/2012), Directive 2011/61/EU,*
+*Delegated Regulation 231/2013, Directive 2024/927/EU, ESMA34-671404336-1364.*
