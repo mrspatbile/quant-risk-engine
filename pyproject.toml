@@ -20,6 +20,7 @@ dependencies = [
     "pandas-datareader",
     "streamlit",
     "QuantLib",
+    "python-dotenv",
 ]
 
 [tool.setuptools.packages.find]

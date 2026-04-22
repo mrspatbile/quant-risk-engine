@@ -98,13 +98,13 @@ Pygments==2.20.0
 pyparsing==3.3.2
 pytest==9.0.3
 python-dateutil==2.9.0.post0
+python-dotenv==1.2.2
 python-json-logger==4.1.0
 pytokens==0.4.1
 pytz==2026.1.post1
 PyYAML==6.0.3
 pyzmq==27.1.0
-# Editable Git install with no remote (quant-risk==0.1.0)
--e /Users/mrspatbile/Documents/coding/quant-risk-engine
+-e git+https://github.com/mrspatbile/quant-risk-engine.git@949aa21f44b6b4f66da2a94e9801065156c8fd38#egg=quant_risk
 QuantLib==1.42.1
 referencing==0.37.0
 requests==2.33.1
