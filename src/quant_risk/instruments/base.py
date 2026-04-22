@@ -115,7 +115,7 @@ class Instrument(ABC):
         -------
         pd.DataFrame
             DataFrame with columns [date, amount, type]
-            where type is 'coupon' or 'principal'.
+            where type is 'coupon', 'principal', or 'premium' (CDS).
         """
         pass
 
