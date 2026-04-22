@@ -603,3 +603,196 @@ class TestFXForward:
 
     def test_cash_flows_type_settlement(self, fwd_seasoned):
         assert fwd_seasoned.cash_flows()['type'].iloc[0] == 'settlement'
+
+
+# ------------------------------------------------------------------
+# VanillaOption tests -- append to tests/test_instruments.py
+# ------------------------------------------------------------------
+
+from quant_risk.instruments.option import VanillaOption
+
+@pytest.fixture
+def opt_valuation_date():
+    d = ql.Date(24, 3, 2026)
+    ql.Settings.instance().evaluationDate = d
+    return d
+
+@pytest.fixture
+def opt_expiry(opt_valuation_date):
+    return opt_valuation_date + ql.Period(91, ql.Days)   # ~3M
+
+@pytest.fixture
+def call_option(opt_valuation_date, opt_expiry):
+    return VanillaOption(
+        spot          = 5250.0,
+        strike        = 5250.0,   # ATM
+        expiry_date   = opt_expiry,
+        valuation_date = opt_valuation_date,
+        sigma         = 0.165,
+        option_type   = 'call',
+        notional_     = 1000.0,
+        div_yield     = 0.030,
+    )
+
+@pytest.fixture
+def put_option(opt_valuation_date, opt_expiry):
+    return VanillaOption(
+        spot          = 5250.0,
+        strike        = 5250.0,   # ATM
+        expiry_date   = opt_expiry,
+        valuation_date = opt_valuation_date,
+        sigma         = 0.165,
+        option_type   = 'put',
+        notional_     = 1000.0,
+        div_yield     = 0.030,
+    )
+
+
+class TestVanillaOption:
+
+    # ── basic properties ──────────────────────────────────────────────────────
+
+    def test_currency(self, call_option):
+        assert call_option.currency == 'EUR'
+
+    def test_notional(self, call_option):
+        assert call_option.notional == 1000.0
+
+    def test_describe_call(self, call_option):
+        d = call_option.describe()
+        assert 'Call' in d
+        assert 'EUR' in d
+        assert '5250' in d
+
+    def test_describe_put(self, put_option):
+        assert 'Put' in put_option.describe()
+
+    # ── pricing ───────────────────────────────────────────────────────────────
+
+    def test_call_price_positive(self, call_option, curve):
+        assert call_option.price(curve) > 0
+
+    def test_put_price_positive(self, put_option, curve):
+        assert put_option.price(curve) > 0
+
+    def test_call_price_above_intrinsic(self, call_option, curve):
+        # time value -- price > intrinsic (0 for ATM)
+        assert call_option.price(curve) > 0
+
+    def test_itm_call_above_atm_call(self, opt_valuation_date, opt_expiry, curve):
+        atm = VanillaOption(5250, 5250, opt_expiry, opt_valuation_date, 0.165, 'call', 1.0, 0.03)
+        itm = VanillaOption(5250, 4750, opt_expiry, opt_valuation_date, 0.165, 'call', 1.0, 0.03)
+        assert itm.price(curve) > atm.price(curve)
+
+    def test_otm_call_below_atm_call(self, opt_valuation_date, opt_expiry, curve):
+        atm = VanillaOption(5250, 5250, opt_expiry, opt_valuation_date, 0.165, 'call', 1.0, 0.03)
+        otm = VanillaOption(5250, 5750, opt_expiry, opt_valuation_date, 0.165, 'call', 1.0, 0.03)
+        assert otm.price(curve) < atm.price(curve)
+
+    def test_put_call_parity(self, call_option, put_option, curve):
+        # C - P = S*e^(-qT) - K*e^(-rT)
+        C = call_option.price(curve) / call_option.notional
+        P = put_option.price(curve)  / put_option.notional
+        S = 5250.0
+        K = 5250.0
+        T = call_option._T
+        q = 0.030
+        disc_handle = call_option._disc_handle_from_curve(curve)
+        r = -np.log(disc_handle.discount(call_option._expiry_date)) / T
+        rhs = S * np.exp(-q * T) - K * np.exp(-r * T)
+        assert abs((C - P) - rhs) < 0.01
+
+    def test_price_increases_with_vol(self, opt_valuation_date, opt_expiry, curve):
+        low_vol  = VanillaOption(5250, 5250, opt_expiry, opt_valuation_date, 0.10, 'call', 1.0, 0.03)
+        high_vol = VanillaOption(5250, 5250, opt_expiry, opt_valuation_date, 0.30, 'call', 1.0, 0.03)
+        assert high_vol.price(curve) > low_vol.price(curve)
+
+    # ── greeks ────────────────────────────────────────────────────────────────
+
+    def test_call_delta_between_zero_and_one(self, call_option, curve):
+        d = call_option.delta(curve) / call_option.notional
+        assert 0 < d < 1
+
+    def test_put_delta_between_minus_one_and_zero(self, put_option, curve):
+        d = put_option.delta(curve) / put_option.notional
+        assert -1 < d < 0
+
+    def test_atm_delta_close_to_half(self, call_option, curve):
+        d = call_option.delta(curve) / call_option.notional
+        assert abs(d - 0.5) < 0.10
+
+    def test_gamma_positive_for_long_call(self, call_option, curve):
+        assert call_option.gamma(curve) > 0
+
+    def test_gamma_positive_for_long_put(self, put_option, curve):
+        assert put_option.gamma(curve) > 0
+
+    def test_call_put_gamma_equal(self, call_option, put_option, curve):
+        # gamma is same for call and put with same parameters
+        assert abs(call_option.gamma(curve) - put_option.gamma(curve)) < 0.001
+
+    def test_vega_positive_for_long_call(self, call_option, curve):
+        assert call_option.vega(curve) > 0
+
+    def test_vega_positive_for_long_put(self, put_option, curve):
+        assert put_option.vega(curve) > 0
+
+    def test_call_put_vega_equal(self, call_option, put_option, curve):
+        assert abs(call_option.vega(curve) - put_option.vega(curve)) < 0.01
+
+    def test_theta_negative_for_long_call(self, call_option, curve):
+        assert call_option.theta(curve) < 0
+
+    def test_theta_negative_for_long_put(self, put_option, curve):
+        assert put_option.theta(curve) < 0
+
+    def test_rho_positive_for_call(self, call_option, curve):
+        assert call_option.dv01(curve) > 0
+
+    def test_rho_negative_for_put(self, put_option, curve):
+        assert put_option.dv01(curve) < 0
+
+    def test_duration_close_to_expiry_tenor(self, call_option, curve):
+        assert abs(call_option.duration(curve) - 0.25) < 0.05
+
+    # ── greeks summary ────────────────────────────────────────────────────────
+
+    def test_greeks_summary_keys(self, call_option, curve):
+        g = call_option.greeks_summary(curve)
+        assert all(k in g for k in ['price', 'delta', 'gamma', 'vega', 'theta', 'rho'])
+
+    # ── implied volatility ────────────────────────────────────────────────────
+
+    def test_implied_vol_round_trip(self, call_option, curve):
+        disc_handle  = call_option._disc_handle_from_curve(curve)
+        r            = -np.log(disc_handle.discount(call_option._expiry_date)) / call_option._T
+        market_price = call_option._bsm_price(r)
+        iv           = call_option.implied_vol(market_price, r=r)
+        assert abs(iv - call_option._sigma) < 0.0001
+
+    # ── FRTB curvature ────────────────────────────────────────────────────────
+
+    def test_frtb_curvature_keys(self, call_option, curve):
+        cvr = call_option.frtb_curvature(curve)
+        assert all(k in cvr for k in ['V', 'V_up', 'V_down', 'cvr_up', 'cvr_down', 'cvr'])
+
+    def test_frtb_cvr_non_negative(self, call_option, curve):
+        # CVR is always >= 0 for long options (positive gamma)
+        assert call_option.frtb_curvature(curve)['cvr'] >= 0
+
+    def test_frtb_v_up_above_v_down_for_call(self, call_option, curve):
+        cvr = call_option.frtb_curvature(curve)
+        assert cvr['V_up'] > cvr['V_down']
+
+    # ── cash flows ────────────────────────────────────────────────────────────
+
+    def test_cash_flows_columns(self, call_option):
+        cf = call_option.cash_flows()
+        assert all(c in cf.columns for c in ['date', 'amount', 'type'])
+
+    def test_cash_flows_single_row(self, call_option):
+        assert len(call_option.cash_flows()) == 1
+
+    def test_atm_intrinsic_zero(self, call_option):
+        # ATM option -- intrinsic is zero
+        assert call_option.cash_flows()['amount'].iloc[0] == 0.0
