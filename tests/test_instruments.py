@@ -343,3 +343,263 @@ class TestCreditDefaultSwap:
     def test_bootstrapped_par_spread_at_5y(self, cds_bootstrapped, curve):
         # 5Y market spread is 150bps -- par spread should be close
         assert abs(cds_bootstrapped.par_spread(curve) - 0.0150) < 0.0010
+
+
+
+# ------------------------------------------------------------------
+# FXForward tests
+# ------------------------------------------------------------------
+
+import QuantLib as ql
+from quant_risk.instruments.fx_forward import FXForward
+
+@pytest.fixture
+def fx_setup(valuation_date):
+    """Build USD discount handle matching notebook construction."""
+    day_count_fx = ql.Actual360()
+    us_calendar  = ql.UnitedStates(ql.UnitedStates.GovernmentBond)
+
+    # USD rates from notebook -- SOFR + Treasury CMT March 24 2026
+    usd_dates = [
+        valuation_date,
+        valuation_date + ql.Period(91,  ql.Days),   # 3M
+        valuation_date + ql.Period(182, ql.Days),   # 6M
+        valuation_date + ql.Period(365, ql.Days),   # 1Y
+        valuation_date + ql.Period(730, ql.Days),   # 2Y
+        valuation_date + ql.Period(1825, ql.Days),  # 5Y
+        valuation_date + ql.Period(3650, ql.Days),  # 10Y
+    ]
+    usd_rates = [
+        0.03630,   # SOFR overnight
+        0.03740,   # 3M
+        0.03780,   # 6M
+        0.03810,   # 1Y
+        0.03900,   # 2Y
+        0.04030,   # 5Y
+        0.04390,   # 10Y
+    ]
+    usd_zc = ql.ZeroCurve(
+        usd_dates, usd_rates, day_count_fx,
+        us_calendar, ql.Linear(), ql.Continuous
+    )
+    usd_zc.enableExtrapolation()
+    usd_handle = ql.YieldTermStructureHandle(usd_zc)
+
+    spot_eurusd = 1.1578
+    return usd_handle, spot_eurusd
+
+@pytest.fixture
+def fx_maturity(valuation_date):
+    return valuation_date + ql.Period(365, ql.Days)   # 1Y
+
+@pytest.fixture
+def fwd_inception(valuation_date, fx_maturity, fx_setup):
+    usd_handle, spot = fx_setup
+    return FXForward.at_inception(
+        notional_foreign = 1_000_000,
+        spot_rate        = spot,
+        maturity_date    = fx_maturity,
+        valuation_date   = valuation_date,
+        usd_disc_handle  = usd_handle,
+    )
+
+@pytest.fixture
+def fwd_seasoned(valuation_date, fx_maturity, fx_setup):
+    usd_handle, spot = fx_setup
+    return FXForward.seasoned(
+        notional_foreign = 1_000_000,
+        spot_rate        = spot,
+        f0               = 1.1792,   # contractual rate from notebook
+        maturity_date    = fx_maturity,
+        valuation_date   = valuation_date,
+        usd_disc_handle  = usd_handle,
+    )
+
+class TestFXForward:
+
+    # ── basic properties ──────────────────────────────────────────────────────
+
+    def test_currency(self, fwd_inception):
+        assert fwd_inception.currency == 'EUR'
+
+    def test_notional(self, fwd_inception):
+        assert fwd_inception.notional == 1_000_000
+
+    def test_describe_contains_key_info(self, fwd_inception):
+        d = fwd_inception.describe()
+        assert 'USD' in d
+        assert 'EUR' in d
+        assert 'Exporter' in d
+
+    # ── forward rate ──────────────────────────────────────────────────────────
+
+    def test_forward_rate_above_spot(self, fwd_inception, curve):
+        # USD rates > EUR rates -- forward EUR/USD > spot
+        assert fwd_inception.forward_rate(curve) > fwd_inception._spot_rate
+
+    def test_forward_rate_close_to_notebook(self, fwd_inception, curve):
+        # notebook shows 1Y forward ~1.1792
+        assert abs(fwd_inception.forward_rate(curve) - 1.1792) < 0.01
+
+    # ── NPV ───────────────────────────────────────────────────────────────────
+
+    def test_npv_zero_at_inception(self, fwd_inception, curve):
+        # forward priced at market rate -- NPV should be near zero
+        assert abs(fwd_inception.price(curve)) < 100
+
+    def test_npv_positive_when_eur_weakens(self, valuation_date, fx_maturity, fx_setup, curve):
+        # F_0 > F_t means EUR weakened -- exporter gains
+        usd_handle, spot = fx_setup
+        fwd = FXForward.seasoned(
+            notional_foreign = 1_000_000,
+            spot_rate        = spot,
+            f0               = 1.2500,   # locked in high rate -- EUR weaker than now
+            maturity_date    = fx_maturity,
+            valuation_date   = valuation_date,
+            usd_disc_handle  = usd_handle,
+        )
+        assert fwd.price(curve) > 0
+
+    def test_npv_negative_when_eur_strengthens(self, valuation_date, fx_maturity, fx_setup, curve):
+        # F_0 < F_t means EUR strengthened -- exporter loses
+        usd_handle, spot = fx_setup
+        fwd = FXForward.seasoned(
+            notional_foreign = 1_000_000,
+            spot_rate        = spot,
+            f0               = 1.0500,   # locked in low rate -- EUR stronger than now
+            maturity_date    = fx_maturity,
+            valuation_date   = valuation_date,
+            usd_disc_handle  = usd_handle,
+        )
+        assert fwd.price(curve) < 0
+
+    def test_npv_flips_for_importer(self, valuation_date, fx_maturity, fx_setup, curve):
+        usd_handle, spot = fx_setup
+        fwd_imp = FXForward.seasoned(
+            notional_foreign = 1_000_000,
+            spot_rate        = spot,
+            f0               = 1.2500,
+            maturity_date    = fx_maturity,
+            valuation_date   = valuation_date,
+            usd_disc_handle  = usd_handle,
+            exporter         = False,
+        )
+        fwd_exp = FXForward.seasoned(
+            notional_foreign = 1_000_000,
+            spot_rate        = spot,
+            f0               = 1.2500,
+            maturity_date    = fx_maturity,
+            valuation_date   = valuation_date,
+            usd_disc_handle  = usd_handle,
+            exporter         = True,
+        )
+        assert abs(fwd_imp.price(curve) + fwd_exp.price(curve)) < 1
+
+    # ── delta FX ──────────────────────────────────────────────────────────────
+
+    def test_delta_fx_negative_for_exporter(self, fwd_seasoned, curve):
+        # exporter loses when EUR strengthens (spot rises)
+        assert fwd_seasoned.delta_fx(curve) < 0
+
+    def test_delta_fx_analytical_vs_numerical(self, fwd_seasoned, curve):
+        # analytical and numerical should be close
+        analytical = fwd_seasoned.delta_fx(curve)
+        numerical  = fwd_seasoned.delta_fx_numerical(curve)
+        assert abs(analytical - numerical) / abs(numerical) < 0.15   # within 15%
+
+    def test_delta_fx_scales_with_notional(self, valuation_date, fx_maturity, fx_setup, curve):
+        usd_handle, spot = fx_setup
+        fwd_large = FXForward.seasoned(
+            notional_foreign = 10_000_000,
+            spot_rate        = spot,
+            f0               = 1.1792,
+            maturity_date    = fx_maturity,
+            valuation_date   = valuation_date,
+            usd_disc_handle  = usd_handle,
+        )
+        fwd_small = FXForward.seasoned(
+            notional_foreign = 1_000_000,
+            spot_rate        = spot,
+            f0               = 1.1792,
+            maturity_date    = fx_maturity,
+            valuation_date   = valuation_date,
+            usd_disc_handle  = usd_handle,
+        )
+        assert abs(fwd_large.delta_fx(curve) / fwd_small.delta_fx(curve) - 10) < 0.01
+
+    # ── delta IR ──────────────────────────────────────────────────────────────
+
+    def test_delta_ir_eur_negative_for_exporter(self, fwd_seasoned, curve):
+        # when EUR rates rise, F_t falls, (F_0 - F_t) rises -- exporter gains
+        # dv01 measures EUR rate sensitivity -- positive for exporter
+        assert fwd_seasoned.dv01(curve) > 0
+
+    def test_delta_ir_usd_positive_for_exporter(self, fwd_seasoned, curve):
+        # when USD rates rise, F_t rises, (F_0 - F_t) falls -- exporter loses
+        assert fwd_seasoned.delta_ir_usd(curve) > 0
+
+    def test_delta_ir_small_relative_to_delta_fx(self, fwd_seasoned, curve):
+        # IR sensitivity (1bp) << FX sensitivity (1%)
+        assert abs(fwd_seasoned.dv01(curve)) < abs(fwd_seasoned.delta_fx(curve))
+
+    # ── duration ─────────────────────────────────────────────────────────────
+
+    def test_duration_close_to_one_year(self, fwd_seasoned, curve):
+        assert abs(fwd_seasoned.duration(curve) - 1.0) < 0.05
+
+    # ── hedge effectiveness ───────────────────────────────────────────────────
+
+    def test_hedge_effectiveness_keys(self, fwd_seasoned, curve):
+        h = fwd_seasoned.hedge_effectiveness(10_000_000, curve)
+        assert all(k in h for k in [
+            'portfolio_eur', 'delta_unhedged', 'delta_hedge',
+            'delta_hedged', 'effectiveness_pct', 'hedge_ratio_pct'
+        ])
+
+    def test_hedge_effectiveness_below_100(self, fwd_seasoned, curve):
+        h = fwd_seasoned.hedge_effectiveness(10_000_000, curve)
+        assert 0 < h['effectiveness_pct'] < 100
+
+    def test_hedge_reduces_delta(self, fwd_seasoned, curve):
+        h = fwd_seasoned.hedge_effectiveness(10_000_000, curve)
+        assert abs(h['delta_hedged']) < abs(h['delta_unhedged'])
+
+    # ── basis ─────────────────────────────────────────────────────────────────
+
+    def test_basis_cost_zero_when_no_basis(self, valuation_date, fx_maturity, fx_setup, curve):
+        usd_handle, spot = fx_setup
+        fwd_no_basis = FXForward.seasoned(
+            notional_foreign = 1_000_000,
+            spot_rate        = spot,
+            f0               = 1.1792,
+            maturity_date    = fx_maturity,
+            valuation_date   = valuation_date,
+            usd_disc_handle  = usd_handle,
+            basis_bps        = 0.0,
+        )
+        assert abs(fwd_no_basis.basis_cost(curve)) < 1
+
+    def test_basis_cost_positive_for_negative_basis(self, valuation_date, fx_maturity, fx_setup, curve):
+        usd_handle, spot = fx_setup
+        fwd_basis = FXForward.seasoned(
+            notional_foreign = 10_000_000,
+            spot_rate        = spot,
+            f0               = 1.1792,
+            maturity_date    = fx_maturity,
+            valuation_date   = valuation_date,
+            usd_disc_handle  = usd_handle,
+            basis_bps        = -20.0,
+        )
+        assert fwd_basis.basis_cost(curve) > 0
+
+    # ── cash flows ────────────────────────────────────────────────────────────
+
+    def test_cash_flows_columns(self, fwd_seasoned):
+        cf = fwd_seasoned.cash_flows()
+        assert all(c in cf.columns for c in ['date', 'amount', 'type'])
+
+    def test_cash_flows_single_settlement(self, fwd_seasoned):
+        assert len(fwd_seasoned.cash_flows()) == 1
+
+    def test_cash_flows_type_settlement(self, fwd_seasoned):
+        assert fwd_seasoned.cash_flows()['type'].iloc[0] == 'settlement'
