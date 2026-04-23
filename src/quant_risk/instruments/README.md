@@ -15,25 +15,19 @@ implementation. This means any instrument can be priced against an OIS
 curve, an NSS curve, a shocked curve, or a simulated Monte Carlo path
 without changing the instrument code.
 
+```
 
 Instrument (abstract base)
 ├── Bond
-
 │   ├── FixedRateBond
-
-│   └── FloatingRateBond     
-
+│   └── FloatingRateBond      
 ├── Swap
-
-│   └── IRSwap  
-
-├── FXForward   
-
-└── Option       
-
+│   └── IRSwap                
+├── FXForward                 
+└── Option                    
     ├── VanillaOption
-    
     └── ExoticOption          
+```
 
 
 ---
@@ -95,16 +89,117 @@ print(bond.key_rate_dv01(curve))
 Multi-curve interest rate swap. Fixed leg discounted at OIS, floating
 leg projected at EURIBOR and discounted at OIS.
 
+```python
+from quant_risk.instruments.swap import IRSwap
+from quant_risk.curves.ois import OISCurvecurve = OISCurve.from_processed()
+swap  = IRSwap(
+notional       = 10_000_000,
+maturity_years = 5,
+fixed_rate     = 2.50,
+valuation_date = "2026-03-24",
+)
+
+print(swap.price(curve))
+print(swap.par_rate(curve))
+print(swap.dv01(curve))
+```
+
+**Regulatory use:**
+- FRTB SA -- GIRR delta per tenor vertex
+- EMIR -- OIS discounting mandatory for collateralised derivatives
+- IFRS 13 -- Level 2 fair value
+
 ---
 
-### `FXForward` -- `fx_forward.py` _(planned)_
-FX forward priced via covered interest rate parity using two OIS curves.
+### `FXForward` -- `fx_forward.py`
+FX forward priced via covered interest rate parity. EUR and USD OIS
+discount curves, cross-currency basis adjustment.
+
+```python
+from quant_risk.instruments.fx_forward import FXForward
+import QuantLib as ql
+
+fwd = FXForward.seasoned(
+    notional_foreign = 1_000_000,
+    spot_rate        = 1.1578,
+    f0               = 1.1792,
+    maturity_date    = ql.Date(24, 3, 2027),
+    valuation_date   = ql.Date(24, 3, 2026),
+    usd_disc_handle  = usd_handle,
+)
+
+print(fwd.price(curve))
+print(fwd.delta_fx(curve))
+print(fwd.delta_ir_usd(curve))
+print(fwd.hedge_effectiveness(10_000_000, curve))
+```
+
+**Regulatory use:**
+- FRTB SA -- delta FX (FX risk bucket), delta IR (GIRR bucket)
+- EMIR -- FX forwards > 3 days are reportable OTC derivatives
+- AIFMD II -- hedge effectiveness monitoring, monthly rebalancing
+- IFRS 13 -- Level 2 fair value
 
 ---
 
-### `VanillaOption` -- `option.py` _(planned)_
-European vanilla option priced via Black-Scholes-Merton with implied
-volatility surface.
+### `VanillaOption` -- `option.py`
+European vanilla option priced via Black-Scholes-Merton. Full Greeks,
+implied volatility inversion, FRTB curvature risk.
+
+```python
+from quant_risk.instruments.option import VanillaOption
+import QuantLib as ql
+
+opt = VanillaOption(
+    spot           = 5250.0,
+    strike         = 5250.0,
+    expiry_date    = ql.Date(24, 6, 2026),
+    valuation_date = ql.Date(24, 3, 2026),
+    sigma          = 0.165,
+    option_type    = 'call',
+    notional_      = 1000.0,
+    div_yield      = 0.030,
+)
+
+print(opt.price(curve))
+print(opt.delta(curve))
+print(opt.vega(curve))
+print(opt.frtb_curvature(curve))
+```
+
+**Regulatory use:**
+- FRTB SA -- delta, vega, curvature risk (CRR3 Article 325)
+- EMIR -- OTC options reporting and margining
+- IFRS 13 -- Level 2 (observable vol), Level 3 (exotic)
+
+---
+
+### `CreditDefaultSwap` -- `cds.py`
+CDS priced via QuantLib MidPointCdsEngine. Hazard rate bootstrapping,
+CS01, jump-to-default, FRTB CSR-NS capital.
+
+```python
+from quant_risk.instruments.cds import CreditDefaultSwap
+import QuantLib as ql
+
+cds = CreditDefaultSwap.from_flat_spread(
+    valuation_date = ql.Date(24, 3, 2026),
+    maturity       = ql.Date(20, 3, 2031),
+    notional_      = 10_000_000,
+    par_spread     = 0.0150,
+    coupon         = 0.0100,
+)
+
+print(cds.price(curve))
+print(cds.cs01(curve))
+print(cds.par_spread(curve))
+print(cds.jump_to_default(curve))
+```
+
+**Regulatory use:**
+- FRTB SA -- CSR-NS delta (CS01 per tenor vertex), Default Risk Charge
+- EMIR -- CDS reporting and clearing obligations
+- IFRS 9/13 -- Level 2 fair value, OIS discounting
 
 ---
 
