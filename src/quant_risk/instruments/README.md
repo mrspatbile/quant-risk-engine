@@ -18,14 +18,22 @@ without changing the instrument code.
 
 Instrument (abstract base)
 ├── Bond
+
 │   ├── FixedRateBond
-│   └── FloatingRateBond      # later
+
+│   └── FloatingRateBond     
+
 ├── Swap
-│   └── IRSwap                # next notebook
-├── FXForward                 # notebook 3
-└── Option                    # notebook 4
+
+│   └── IRSwap  
+
+├── FXForward   
+
+└── Option       
+
     ├── VanillaOption
-    └── ExoticOption          # later
+    
+    └── ExoticOption          
 
 
 ---
