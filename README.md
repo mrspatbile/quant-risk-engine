@@ -1,14 +1,10 @@
 # Quant Risk Engine
 
-A Python quantitative risk engine built on QuantLib, covering the full
-spectrum of market risk, regulatory capital, and fund risk management
-relevant to EU banks and asset managers.
+Python-based quantitative risk framework built on QuantLib, designed as a modular platform covering both banking and asset management use cases in a European regulatory context.
 
-The engine implements live market data pipelines (ECB, FRED), QuantLib-based
-curve construction and instrument pricing, and regulatory frameworks across
-IRRBB, FRTB, AIFMD II, and IFRS 13 -- from raw rate fixings to supervisory
-outlier tests and Annex IV reporting. An interactive Streamlit dashboard
-provides fund liquidity risk analysis across multiple AIF strategies.
+Implements market data ingestion (ECB, FRED), yield curve construction, and fixed-income instrument pricing. Includes selected regulatory components, with initial focus on IRRBB-style interest rate risk metrics and exploratory extensions toward FRTB and AIFMD-related use cases.
+
+Extended with a Streamlit dashboard for portfolio and liquidity risk visualisation across fund strategies.
 
 **Stack:** Python 3.13 | QuantLib 1.42 | Streamlit | ECB SDW | FRED API  
 **Status:** Actively developed -- Sprint 5 in progress
