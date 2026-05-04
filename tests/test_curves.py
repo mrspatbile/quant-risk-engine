@@ -152,3 +152,7 @@ class TestNSSCurve:
         desc = nss_curve.describe()
         assert "NSSCurve" in desc
         assert "EUR" in desc
+
+    def test_from_ecb_with_date(self):
+        nss = NSSCurve.from_ecb(rating='AAA', last_n=60, date='2026-03-24')
+        assert nss.valuation_date <= '2026-03-24'

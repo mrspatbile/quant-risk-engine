@@ -162,27 +162,18 @@ class NSSCurve(DiscountCurve):
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_ecb(cls, rating: str = "AAA", last_n: int = 1) -> "NSSCurve":
-        """
-        Fetch live NSS parameters from ECB SDW and construct curve.
-
-        Parameters
-        ----------
-        rating : str
-            'AAA' for triple-A issuers (G_N_A),
-            'ALL' for all issuers (G_N_C).
-        last_n : int
-            Number of observations to fetch. Uses most recent.
-
-        Returns
-        -------
-        NSSCurve
-        """
+    def from_ecb(cls, rating: str = "AAA", last_n: int = 1, date: str = None) -> "NSSCurve":
         from quant_risk.data.ecb import ECBClient
         client = ECBClient()
         params = client.get_nss_parameters(last_n=last_n, rating=rating)
-        latest = params.iloc[-1]
-        return cls(latest, valuation_date=str(params.index[-1]))
+        if date is not None:
+            available = params.index[params.index <= date]
+            if available.empty:
+                raise ValueError(f"No NSS data available on or before {date}")
+            row, val_date = params.loc[available[-1]], str(available[-1])
+        else:
+            row, val_date = params.iloc[-1], str(params.index[-1])
+        return cls(row, valuation_date=val_date)
 
     @classmethod
     def from_processed(cls, rating: str = "AAA",
