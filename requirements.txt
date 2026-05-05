@@ -42,6 +42,7 @@ ipython_pygments_lexers==1.1.1
 isoduration==20.11.0
 jedi==0.19.2
 Jinja2==3.1.6
+joblib==1.5.3
 json5==0.14.0
 jsonpointer==3.1.1
 jsonschema==4.26.0
@@ -104,7 +105,7 @@ pytokens==0.4.1
 pytz==2026.1.post1
 PyYAML==6.0.3
 pyzmq==27.1.0
--e git+https://github.com/mrspatbile/quant-risk-engine.git@949aa21f44b6b4f66da2a94e9801065156c8fd38#egg=quant_risk
+-e git+https://github.com/mrspatbile/quant-risk-engine.git@a7805c647b109f1e19eae628cac9cf008b5aa0e9#egg=quant_risk
 QuantLib==1.42.1
 referencing==0.37.0
 requests==2.33.1
@@ -113,7 +114,9 @@ rfc3986-validator==0.1.1
 rfc3987-syntax==1.1.0
 rich==15.0.0
 rpds-py==0.30.0
+scikit-learn==1.8.0
 scipy==1.17.1
+seaborn==0.13.2
 Send2Trash==2.1.0
 setuptools==82.0.1
 six==1.17.0
@@ -123,6 +126,7 @@ stack-data==0.6.3
 streamlit==1.56.0
 tenacity==9.1.4
 terminado==0.18.1
+threadpoolctl==3.6.0
 tinycss2==1.4.0
 toml==0.10.2
 tornado==6.5.5

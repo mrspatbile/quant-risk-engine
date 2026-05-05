@@ -21,6 +21,8 @@ dependencies = [
     "streamlit",
     "QuantLib",
     "python-dotenv",
+    "seaborn",
+    "scikit-learn",
 ]
 
 [tool.setuptools.packages.find]
