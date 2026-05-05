@@ -3,13 +3,26 @@ Shared setup for macro / FRED-based notebooks.
 """
 
 
+import sys
 import os
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+SRC_PATH = os.path.join(PROJECT_ROOT, "src")
+
+sys.path.insert(0, SRC_PATH)
+
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
 from quant_risk.data.fed import FedClient
+from quant_risk.data.fed_store import FREDStore
+from quant_risk.data.external_store import ExternalStore
+
 from quant_risk.config import FRED_API_KEY
+
+store = FREDStore(FRED_API_KEY)
+external_store = ExternalStore()
 
 pd.set_option("display.float_format", "{:.6f}".format)
 
@@ -22,8 +35,8 @@ if FRED_API_KEY is None:
 
 fed_client = FedClient(api_key=FRED_API_KEY)
 
-print("FedClient initialized")
-
+print("FedClient initialized: fed_client object")
+print("FRED initialized: store object")
 
 
 # =========================

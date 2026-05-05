@@ -1,10 +1,13 @@
+# fed_store.py
 import os
 import pandas as pd
 from pathlib import Path
-
+from quant_risk.config import CACHE_DIR
 from quant_risk.data.fed import FedClient
 from quant_risk.data.fed_registry import FRED_SERIES
 
+
+    
 
 class FREDStore:
     """
@@ -14,9 +17,9 @@ class FREDStore:
     - aligned panel construction
     """
 
-    def __init__(self, api_key: str, cache_dir: str = "data/cache/fred"):
+    def __init__(self, api_key: str, cache_dir: str = None):
         self.client = FedClient(api_key)
-        self.cache_dir = Path(cache_dir)
+        self.cache_dir = Path(cache_dir) if cache_dir else CACHE_DIR / "fred"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     # ----------------------------

@@ -1,36 +1,29 @@
-# src/quant_risk/config.py
-
-"""
-Project-wide configuration and environment variable loading.
-
-Import this module at the start of any script or notebook to ensure
-all API keys and environment variables are available.
-
-Usage:
-    from quant_risk.config import FRED_API_KEY, config
-"""
-
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-# load .env file from project root
-_project_root = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../..")
-)
-load_dotenv(os.path.join(_project_root, ".env"))
+_project_root = Path(__file__).resolve().parents[2]
+load_dotenv(_project_root / ".env")
+
+# paths
+PROJECT_ROOT  = _project_root
+CACHE_DIR     = PROJECT_ROOT / "data" / "cache"
+PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 
 # API keys
-FRED_API_KEY = os.getenv("FRED_API_KEY")
-BCB_API_KEY  = os.getenv("BCB_API_KEY", None)   # optional
+FRED_API_KEY = os.getenv("FRED_API_KEY", "").strip()
+BCB_API_KEY  = os.getenv("BCB_API_KEY", "").strip() or None
 
-# config dict for convenience
 config = {
-    "FRED_API_KEY" : FRED_API_KEY,
-    "BCB_API_KEY"  : BCB_API_KEY,
-    "project_root" : _project_root,
+    "FRED_API_KEY"  : FRED_API_KEY,
+    "BCB_API_KEY"   : BCB_API_KEY,
+    "project_root"  : PROJECT_ROOT,
+    "cache_dir"     : CACHE_DIR,
+    "processed_dir" : PROCESSED_DIR,
 }
 
 if __name__ == "__main__":
     print(f"FRED API key : {'SET' if FRED_API_KEY else 'NOT SET'}")
     print(f"BCB API key  : {'SET' if BCB_API_KEY else 'NOT SET'}")
-    print(f"Project root : {_project_root}")
+    print(f"Project root : {PROJECT_ROOT}")
+    print(f"Cache dir    : {CACHE_DIR}")
