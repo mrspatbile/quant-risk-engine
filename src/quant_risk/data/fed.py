@@ -151,3 +151,9 @@ class FedClient(CentralBankClient):
                 f"Choose from {list(fx_series.keys())}"
             )
         return self._get_series(series_id, last_n)
+    
+    def get_series(self, series_id: str, last_n: int = 252) -> pd.Series:
+        """
+        Public wrapper for generic FRED series access.
+        """
+        return self._get_series(series_id, last_n)
