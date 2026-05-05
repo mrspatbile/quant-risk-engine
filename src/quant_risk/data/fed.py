@@ -152,8 +152,16 @@ class FedClient(CentralBankClient):
             )
         return self._get_series(series_id, last_n)
     
-    def get_series(self, series_id: str, last_n: int = 252) -> pd.Series:
-        """
-        Public wrapper for generic FRED series access.
-        """
-        return self._get_series(series_id, last_n)
+    def get_series(self, name: str):
+        import time
+
+        if name not in FRED_SERIES:
+            raise ValueError(f"{name} not in registry")
+
+        try:
+            series_id = FRED_SERIES[name]
+            return self.client._get_series(series_id)
+
+        except Exception as e:
+            print(f"[WARN] {name} failed: {e}")
+            return pd.Series(dtype=float)
