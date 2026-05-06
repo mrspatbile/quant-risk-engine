@@ -16,10 +16,11 @@ Extended with a Streamlit dashboard for portfolio and liquidity risk visualisati
 | Domain | Status |
 |--------|--------|
 | Yield curve construction -- OIS bootstrapping, NSS | Done |
-| Instrument pricing -- bonds, IR swaps, FX forwards, options | Done / In progress |
+| Instrument pricing -- bonds, IR swaps, FX forwards, options, callable bonds and strategies (carry trade and FI strats) | Done |
 | IRRBB -- EVE and NII supervisory outlier tests | Done |
 | FRTB SA -- GIRR delta, key rate DV01 | Done |
 | Fund liquidity risk -- AIFMD II, Annex IV, LMTs | Done |
+| Portfolio Management -- macrofactors, risk-on, riskoff regimes + factor model portf. construction, attribution, hedging | Done |
 | ETF liquidity stress -- creation/redemption mechanism, AP arbitrage breakdown | In progress |
 | Monte Carlo + short rate models | Planned -- Sprint 6/7 |
 | XVA -- CVA, FVA, MVA + neural network approximator | Planned -- Sprint 8 |
@@ -31,23 +32,30 @@ Extended with a Streamlit dashboard for portfolio and liquidity risk visualisati
 
 ```
 quant-risk-engine/
-├── src/quant_risk/
-│   ├── data/           # Market data clients -- ECB, Fed, BCB
-│   ├── curves/         # OISCurve, NSSCurve -- QuantLib wrappers
-│   ├── instruments/    # Bond, IRSwap, FXForward, VanillaOption
-│   └── risk/           # Risk calculators (in progress)
+├── apps/
+│   ├── fund_liquidity/ # Streamlit dashboard -- AIFMD liquidity risk
+│   └── etf_liquidity/  # Streamlit dashboard -- ETF liquidity stress (in progress)
+├── data/
+│   ├── cached/
+│   ├── processed/      # Bootstrapped curves, fund position data
+│   └── raw/
+├── docs
 ├── notebooks/
 │   ├── 01_yield_curves/
 │   ├── 02_asset_pricing/
 │   ├── 03_simulations/
 │   ├── 04_bank_risk/
-│   └── 05_fund_risk/
-├── apps/
-│   ├── fund_liquidity/ # Streamlit dashboard -- AIFMD liquidity risk
-│   └── etf_liquidity/  # Streamlit dashboard -- ETF liquidity stress (in progress)
-├── tests/              # Unit tests -- all passing
-└── data/
-    └── processed/      # Bootstrapped curves, fund position data
+│   ├── 05_fund_risk/
+│   └── 06_portfolio_management/
+├── scripts/
+│   └── tests/              # Unit tests -- all passing
+└── src/quant_risk/
+│   ├── data/           # Market data clients -- ECB, Fed, BCB
+│   ├── curves/         # OISCurve, NSSCurve -- QuantLib wrappers
+│   ├── instruments/    # Bond, IRSwap, FXForward, VanillaOption
+│   └── risk/           # Risk calculators (in progress)
+└── tests/  
+
 ```
 
 ---
@@ -71,35 +79,17 @@ quant-risk-engine/
 | 01_bonds.ipynb | Bund pricing, z-spread, key rate DV01, FRTB GIRR context |
 | 02_swaps.ipynb | Multi-curve IRS (OIS + EURIBOR), par rate, MTM lifecycle, DV01, leg decomposition |
 | 03_fx_forwards.ipynb | CIP, EUR/USD forward curve, delta FX, delta IR, hedge effectiveness, cross-currency basis |
-| 04_options_vol.ipynb | BSM, implied vol, smile, SVI -- in progress |
-| carry_trade.ipynb | Carry trade risk analysis -- in progress |
-| futures.ipynb | Futures pricing, cost of carry, basis -- in progress |
+| 04_options_vol.ipynb | BSM, greeks, implied vol, smile, SVI, greeks surfaces |
+| 05_cds.ipynb | cds spreads, pricing dynamics |
+| 06_carry_trade.ipynb | CIP vs UIP, carry trade breaks, P&L decomposition: carry + spot return |
+| 07_futures.ipynb | Futures convexity (Hull White approximation), margining |
+| 08_fi_strategies.ipynb | curve plays: faltening, steepeing, butterfly, rolling teh curve |
+| 09_callable_bonds.ipynb | binomial tree |
+
 
 **OOP:** `Bond`, `IRSwap`, `FXForward`, `VanillaOption` -- all inherit from `Instrument` ABC.
 
 **Regulatory context:** EMIR (OIS discounting), FRTB SA GIRR delta, IFRS 13 fair value levels.
-
----
-
-## Module 6 -- ETF Liquidity Stress
-
-ETF-specific liquidity risk analysis covering the creation/redemption mechanism
-under market stress. Covers four ETF types common in the Luxembourg UCITS market:
-
-| ETF | Underlying | Key risk |
-|-----|-----------|---------|
-| Equity ETF | EuroStoxx 50 large caps | Bid-ask widening, tracking error under stress |
-| Fixed Income ETF | EUR IG corporate bonds | Underlying illiquidity drives premium/discount |
-| Smart Beta ETF | Factor -- value + low vol | Mixed liquidity profile, rebalancing risk |
-| Commodity ETF | Physically backed / swap-based | Collateral liquidity, roll cost |
-
-**Metrics:** tracking error, tracking difference, premium/discount to NAV,
-authorised participant arbitrage cost, creation/redemption breakdown indicator.
-
-**Regulatory basis:** ESMA guidelines on ETF liquidity under stressed conditions,
-UCITS Directive 2009/65/EC, PRIIPs Regulation 1286/2014.
-
-**App:**  -- Streamlit dashboard (in progress).
 
 ---
 
@@ -145,6 +135,34 @@ ESMA34-671404336-1364 board-decision framework.
 **Regulatory basis:** Delegated Regulation 231/2013, AIFMD II Directive 2024/927/EU,
 ESMA34-671404336-1364 (Guidelines on LMTs, April 2025), ESMA/2013/232 (Annex IV).
 
+
+Implemented as STREAMLIT DASHBOARD
+
+ETF-specific liquidity risk analysis covering the creation/redemption mechanism
+under market stress. Covers four ETF types common in the Luxembourg UCITS market:
+
+| ETF | Underlying | Key risk |
+|-----|-----------|---------|
+| Equity ETF | EuroStoxx 50 large caps | Bid-ask widening, tracking error under stress |
+| Fixed Income ETF | EUR IG corporate bonds | Underlying illiquidity drives premium/discount |
+| Smart Beta ETF | Factor -- value + low vol | Mixed liquidity profile, rebalancing risk |
+| Commodity ETF | Physically backed / swap-based | Collateral liquidity, roll cost |
+
+**Metrics:** tracking error, tracking difference, premium/discount to NAV,
+authorised participant arbitrage cost, creation/redemption breakdown indicator.
+
+**Regulatory basis:** ESMA guidelines on ETF liquidity under stressed conditions,
+UCITS Directive 2009/65/EC, PRIIPs Regulation 1286/2014.
+
+---
+
+## Module 6 -- Portfolio Management
+
+Factor Models: macro factors data ingestion and visualization 
+Factor model theory, portfolio optimization, attribution and hedging.
+
+
+
 ---
 
 ## Regulation Coverage
@@ -170,18 +188,19 @@ ESMA34-671404336-1364 (Guidelines on LMTs, April 2025), ESMA/2013/232 (Annex IV)
 
 ```
 src/quant_risk/
-├── data/
-│   ├── base.py         # CentralBankClient ABC
-│   ├── ecb.py          # ECBClient -- ESTR, NSS, MMSR, FX
-│   ├── fed.py          # FedClient -- SOFR, Treasury CMT, EUR/USD
-│   └── bcb.py          # BCBClient -- CDI, Selic
 ├── curves/
 │   ├── base.py         # DiscountCurve ABC
 │   ├── ois.py          # OISCurve -- QuantLib bootstrapping
 │   └── nss.py          # NSSCurve -- Nelson-Siegel-Svensson
+├── data/
+│   ├── base.py         # CentralBankClient ABC
+│   ├── ecb.py          # ECBClient -- ESTR, NSS, MMSR, FX
+│   ├── external.py     # External registry and store with a generic series wraper
+│   └── bcb.py          # BCBClient -- CDI, Selic
 └── instruments/
     ├── base.py         # Instrument ABC
     ├── bond.py         # Bond -- OIS discounting, z-spread, key rate DV01
+    ├── cds.py          # hazard rate, credit triangle, recovery rate, ISDA standards
     ├── swap.py         # IRSwap -- multi-curve, par rate, MTM, DV01
     ├── fx_forward.py   # FXForward -- CIP, NPV, delta FX/IR
     └── option.py       # VanillaOption -- BSM, implied vol (in progress)
