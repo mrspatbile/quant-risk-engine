@@ -49,7 +49,7 @@ def asset_pricing():
     print(f"Calendar       : TARGET")
     print("asset pricing loaded")
 
-    return ois_curve, nss_curve, valuation_date, calendar
+    return ois_curve, nss_curve, valuation_date, calendar, ql
 
 
 def macro():
