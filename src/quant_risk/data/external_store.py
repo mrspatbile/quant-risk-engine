@@ -9,74 +9,77 @@ import urllib.request
 import zipfile
 import io
 
-class ExternalStore:
+from quant_risk.data.cache_mixin import CacheMixin
+
+class ExternalStore(CacheMixin):
+
     def __init__(self, cache_dir: str = None):
         self.cache_dir = Path(cache_dir) if cache_dir else CACHE_DIR / "external"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # ----------------------------
-    # caching layer
-    # ----------------------------
-    def _cache_path(self, name: str):
-        return self.cache_dir / f"{name}.parquet"
+    # # ----------------------------
+    # # caching layer
+    # # ----------------------------
+    # def _cache_path(self, name: str):
+    #     return self.cache_dir / f"{name}.parquet"
 
-    # def _load_cache(self, name: str):
+    # # def _load_cache(self, name: str):
+    # #     path = self._cache_path(name)
+    # #     if path.exists():
+    # #         return pd.read_parquet(path)
+    # #     return None
+
+
+    # def _load_cache(self, name: str) -> pd.Series | pd.DataFrame | None:
     #     path = self._cache_path(name)
     #     if path.exists():
-    #         return pd.read_parquet(path)
+    #         df = pd.read_parquet(path)
+    #         if df.shape[1] == 1:
+    #             return df.iloc[:, 0].rename(df.columns[0])
+    #         return df
     #     return None
 
 
-    def _load_cache(self, name: str) -> pd.Series | pd.DataFrame | None:
-        path = self._cache_path(name)
-        if path.exists():
-            df = pd.read_parquet(path)
-            if df.shape[1] == 1:
-                return df.iloc[:, 0].rename(df.columns[0])
-            return df
-        return None
+    # # def _save_cache(self, name: str, s: pd.Series):
+    # #     s.to_frame(name=name).to_parquet(self._cache_path(name))
 
 
-    # def _save_cache(self, name: str, s: pd.Series):
-    #     s.to_frame(name=name).to_parquet(self._cache_path(name))
+    # def _save_cache(self, name: str, s: pd.Series | pd.DataFrame):
+    #     path = self._cache_path(name)
+    #     if isinstance(s, pd.Series):
+    #         s.to_frame(name=name).to_parquet(path)
+    #     else:
+    #         s.to_parquet(path)
 
 
-    def _save_cache(self, name: str, s: pd.Series | pd.DataFrame):
-        path = self._cache_path(name)
-        if isinstance(s, pd.Series):
-            s.to_frame(name=name).to_parquet(path)
-        else:
-            s.to_parquet(path)
+    # def clear_cache(self, names: str | list[str] | None = None) -> None:
+    #     """
+    #     Delete cached parquet files.
+    #     If names is a string, deletes that series.
+    #     If names is a list, deletes each series in the list.
+    #     If names is None, clears the entire cache.
 
+    #     Usage:
 
-    def clear_cache(self, names: str | list[str] | None = None) -> None:
-        """
-        Delete cached parquet files.
-        If names is a string, deletes that series.
-        If names is a list, deletes each series in the list.
-        If names is None, clears the entire cache.
-
-        Usage:
-
-        store.clear_cache()                            # nuke all
-        store.clear_cache("HY_OAS")                    # single
-        store.clear_cache(["HY_OAS", "IG_OAS", "DXY"]) # list
-        """
-        if names is None:
-            files = list(self.cache_dir.glob("*.parquet"))
-            for f in files:
-                f.unlink()
-            print(f"cleared {len(files)} files from cache")
-        else:
-            if isinstance(names, str):
-                names = [names]
-            for name in names:
-                path = self._cache_path(name)
-                if path.exists():
-                    path.unlink()
-                    print(f"cleared: {name}")
-                else:
-                    print(f"not found in cache: {name}")
+    #     store.clear_cache()                            # nuke all
+    #     store.clear_cache("HY_OAS")                    # single
+    #     store.clear_cache(["HY_OAS", "IG_OAS", "DXY"]) # list
+    #     """
+    #     if names is None:
+    #         files = list(self.cache_dir.glob("*.parquet"))
+    #         for f in files:
+    #             f.unlink()
+    #         print(f"cleared {len(files)} files from cache")
+    #     else:
+    #         if isinstance(names, str):
+    #             names = [names]
+    #         for name in names:
+    #             path = self._cache_path(name)
+    #             if path.exists():
+    #                 path.unlink()
+    #                 print(f"cleared: {name}")
+    #             else:
+    #                 print(f"not found in cache: {name}")
 
     # ----------------------------
     # public API

@@ -6,10 +6,10 @@ from quant_risk.config import CACHE_DIR
 from quant_risk.data.fed import FedClient
 from quant_risk.data.fed_registry import FRED_SERIES
 
+from quant_risk.data.cache_mixin import CacheMixin
 
-    
+class FREDStore(CacheMixin):
 
-class FREDStore:
     """
     High-level macro data layer:
     - full history
@@ -22,20 +22,20 @@ class FREDStore:
         self.cache_dir = Path(cache_dir) if cache_dir else CACHE_DIR / "fred"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # ----------------------------
-    # caching layer
-    # ----------------------------
-    def _cache_path(self, name: str):
-        return self.cache_dir / f"{name}.parquet"
+    # # ----------------------------
+    # # caching layer
+    # # ----------------------------
+    # def _cache_path(self, name: str):
+    #     return self.cache_dir / f"{name}.parquet"
 
-    def _load_cache(self, name: str):
-        path = self._cache_path(name)
-        if path.exists():
-            return pd.read_parquet(path)
-        return None
+    # def _load_cache(self, name: str):
+    #     path = self._cache_path(name)
+    #     if path.exists():
+    #         return pd.read_parquet(path)
+    #     return None
 
-    def _save_cache(self, name: str, df: pd.Series):
-        df.to_frame(name=name).to_parquet(self._cache_path(name))
+    # def _save_cache(self, name: str, df: pd.Series):
+    #     df.to_frame(name=name).to_parquet(self._cache_path(name))
 
     # ----------------------------
     # public API
@@ -49,7 +49,7 @@ class FREDStore:
 
         cached = self._load_cache(name)
         if cached is not None:
-            return cached[name]
+            return cached
 
         series_id = FRED_SERIES[name]
         s = self.client._get_series(series_id, last_n=None)
