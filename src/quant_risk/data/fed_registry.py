@@ -17,6 +17,11 @@ FRED_SERIES = {
 
     # FX
     "EURUSD": "DEXUSEU",
+    "DXY": "DTWEXBGS",
+
+    # Agriculture
+    "CORN": "CORNPRMMBTU",
+    "SPGSAG": "SPGSAG",
 
 
 }
