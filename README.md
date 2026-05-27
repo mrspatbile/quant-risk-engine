@@ -1,3 +1,5 @@
+![Tests](https://github.com/mrspatbile/quant-risk-engine/actions/workflows/test.yml/badge.svg)
+
 # Quant Risk Engine
 
 Python-based quantitative risk framework built on QuantLib, designed as a modular platform covering both banking and asset management use cases in a European regulatory context.
