@@ -15,12 +15,6 @@ from quant_risk.curves.nss import NSSCurve
 # OISCurve tests
 # ------------------------------------------------------------------
 
-@pytest.fixture
-def ois_curve():
-    """Load OIS curve from processed files."""
-    return OISCurve.from_processed()
-
-
 class TestOISCurve:
 
     def test_loads(self, ois_curve):
@@ -152,7 +146,8 @@ class TestNSSCurve:
         desc = nss_curve.describe()
         assert "NSSCurve" in desc
         assert "EUR" in desc
-
+        
+    @pytest.mark.skip(reason="live ECB API")
     def test_from_ecb_with_date(self):
         nss = NSSCurve.from_ecb(rating='AAA', last_n=60, date='2026-03-24')
         assert nss.valuation_date <= '2026-03-24'

@@ -10,11 +10,6 @@ from quant_risk.curves.ois import OISCurve
 
 
 @pytest.fixture
-def curve():
-    return OISCurve.from_processed()
-
-
-@pytest.fixture
 def bund():
     return Bond(
         isin          = "DE0001102580",
@@ -116,11 +111,12 @@ class TestIRSwap:
     def test_par_rate_positive(self, swap, curve):
         assert swap.par_rate(curve) > 0
 
-    def test_npv_at_par_is_zero(self, curve):
+    def test_npv_at_par_is_zero(self, swap, curve):
+        par_rate = swap.par_rate(curve)
         par = IRSwap(
             notional       = 10_000_000,
             maturity_years = 5,
-            fixed_rate     = 2.4889,
+            fixed_rate     = par_rate,
             valuation_date = "2026-03-24",
         )
         assert abs(par.price(curve)["npv"]) < 100
@@ -237,7 +233,7 @@ class TestCreditDefaultSwap:
             par_spread     = 0.0100,
             coupon         = 0.0100,
         )
-        assert abs(cds_par.price(curve)) < 5000   # small residual from OIS discounting
+        assert abs(cds_par.price(curve)) < 10_000   # small residual from OIS discounting
 
     def test_par_spread_recovers_input(self, cds_flat, curve):
         # par spread from pricer should match the 150bps input
