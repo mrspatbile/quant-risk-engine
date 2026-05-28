@@ -52,6 +52,7 @@ quant-risk-engine/
 │   ├── 04_bank_risk/       # Planned — FRTB SA, ICAAP
 │   ├── 05_fund_risk/
 │   └── 06_portfolio_management/
+├── configs/                # market_config.yaml
 ├── scripts/                # Live integration scripts — test_ecb.py, test_ecb_full.py
 │                           # These make real API calls. Not the same as tests/.
 ├── src/quant_risk/
@@ -189,7 +190,7 @@ very long-dated instruments.
 
 - Tests live in `tests/`. Run with `pytest tests/ -v`.
 - Do not confuse with `scripts/` — those make live API calls and are not pytest tests.
-- 23+ tests currently passing. Do not break them.
+- 184+ tests currently passing. Do not break them.
 - New functionality needs tests before or alongside the implementation, not after.
 - Tests must not depend on live API calls. Use fixtures or synthetic data.
 - Tests must not depend on files in `data/processed/` or `data/cache/`. The current
@@ -203,9 +204,21 @@ very long-dated instruments.
 
 ## Active work
 
-There are five production quality tasks in the current sprint (CI/CD pipeline,
-`FundLiquiditySimulator` test coverage, QuantLib global state context manager,
-structured logging, input validation). We will work through them in that order.
+Sprint 5 is complete (CI/CD pipeline, `FundLiquiditySimulator` test coverage,
+QuantLib global state context manager, structured logging, input validation).
+
+Current sprint (Sprint 6) covers Module 3 — Monte Carlo simulations and XVA:
+
+- **QRE-48** MC interest rate paths notebook — antithetic sampling
+- **QRE-49** MC bond and swap pricing notebook — convergence analysis
+- **QRE-50** MC equity paths notebook — GBM, local vol
+- **QRE-51** MC simulator OOP class
+- **QRE-53** CVA notebook — expected exposure, default modelling
+- **QRE-54** FVA notebook — funding cost, CSA impact, OIS vs SOFR
+- **QRE-55** MVA notebook — initial margin, SIMM methodology
+- **QRE-56** XVA aggregation notebook — CVA + DVA + FVA
+- **QRE-57** XVA OOP class
+
 When starting a task, ask me for the Jira ticket number to include in the commit
 message.
 
@@ -242,15 +255,4 @@ echo "FRED_API_KEY=your_key_here" > .env
 pytest tests/ -v
 streamlit run apps/fund_liquidity/app.py
 jupyter lab
-
-
----
-
-A few things I added that were not in your draft:
-
-- `data/cache/external/` subdirectory — that's where `ExternalStore` actually writes, from the source code
-- The `scripts/` vs `tests/` distinction — `scripts/` has `test_ecb.py` and `test_ecb_full.py` that make live API calls; a new contributor would conflate these with the test suite
-- `Bond._curve_pillars()` 15Y ceiling — a subtle constraint that affects long-dated bond pricing
-- The FRTB SA vertices spelled out explicitly — they're hardcoded in `Bond._FRTB_VERTICES` and a reviewer needs to know not to change them
-- The `from_processed()` fixture fragility called out directly in the testing section, since that's the specific thing that will break a clean checkout
-- Removed `.env.example` from the run instructions — that file does not exist
+```

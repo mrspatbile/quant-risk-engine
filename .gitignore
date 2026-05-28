@@ -12,3 +12,7 @@ data/processed/
 *.egg-info/
 dist/
 .DS_Store
+logs/
+*.png
+*_old.ipynb
+*_fixed.ipynb

@@ -9,7 +9,7 @@ Implements market data ingestion (ECB, FRED), yield curve construction, and fixe
 Extended with a Streamlit dashboard for portfolio and liquidity risk visualisation across fund strategies.
 
 **Stack:** Python 3.13 | QuantLib 1.42 | Streamlit | ECB SDW | FRED API  
-**Status:** Actively developed -- Sprint 5 in progress
+**Status:** Actively developed -- Sprint 6 in progress
 
 ---
 
@@ -24,8 +24,8 @@ Extended with a Streamlit dashboard for portfolio and liquidity risk visualisati
 | Fund liquidity risk -- AIFMD II, Annex IV, LMTs | Done |
 | Portfolio Management -- macrofactors, risk-on, riskoff regimes + factor model portf. construction, attribution, hedging | Done |
 | ETF liquidity stress -- creation/redemption mechanism, AP arbitrage breakdown | In progress |
-| Monte Carlo + short rate models | Planned -- Sprint 6/7 |
-| XVA -- CVA, FVA, MVA + neural network approximator | Planned -- Sprint 8 |
+| Monte Carlo + short rate models | In progress -- Sprint 6 |
+| XVA -- CVA, FVA, MVA + neural network approximator | In progress -- Sprint 6 |
 | Credit risk -- IRB, IFRS 9 ECL | Planned -- Module 7 |
 
 ---
@@ -36,12 +36,14 @@ Extended with a Streamlit dashboard for portfolio and liquidity risk visualisati
 quant-risk-engine/
 ├── apps/
 │   ├── fund_liquidity/ # Streamlit dashboard -- AIFMD liquidity risk
-│   └── etf_liquidity/  # Streamlit dashboard -- ETF liquidity stress (in progress)
+│   └── etf/            # Streamlit dashboard -- ETF liquidity stress (in progress)
+├── configs/            # market_config.yaml
 ├── data/
-│   ├── cached/
+│   ├── cache/          # Parquet cache -- ECB, FRED, yfinance, FF factors, GPR
+│   │   └── external/   # ExternalStore cache subdirectory
 │   ├── processed/      # Bootstrapped curves, fund position data
 │   └── raw/
-├── docs
+├── docs/
 ├── notebooks/
 │   ├── 01_yield_curves/
 │   ├── 02_asset_pricing/
@@ -49,14 +51,13 @@ quant-risk-engine/
 │   ├── 04_bank_risk/
 │   ├── 05_fund_risk/
 │   └── 06_portfolio_management/
-├── scripts/
-│   └── tests/              # Unit tests -- all passing
-└── src/quant_risk/
-│   ├── data/           # Market data clients -- ECB, Fed, BCB
+├── scripts/            # Live integration scripts -- real API calls, not pytest tests
+├── src/quant_risk/
+│   ├── data/           # ECBClient, FedClient -- ABC-based; ExternalStore (yfinance/FF/GPR)
 │   ├── curves/         # OISCurve, NSSCurve -- QuantLib wrappers
-│   ├── instruments/    # Bond, IRSwap, FXForward, VanillaOption
+│   ├── instruments/    # Bond, IRSwap, FXForward, VanillaOption, CDS
 │   └── risk/           # Risk calculators (in progress)
-└── tests/  
+└── tests/              # Pytest unit tests -- 184+ passing
 
 ```
 
@@ -85,7 +86,7 @@ quant-risk-engine/
 | 05_cds.ipynb | cds spreads, pricing dynamics |
 | 06_carry_trade.ipynb | CIP vs UIP, carry trade breaks, P&L decomposition: carry + spot return |
 | 07_futures.ipynb | Futures convexity (Hull White approximation), margining |
-| 08_fi_strategies.ipynb | curve plays: faltening, steepeing, butterfly, rolling teh curve |
+| 08_fi_strategies.ipynb | curve plays: flattening, steepening, butterfly, rolling the curve |
 | 09_callable_bonds.ipynb | binomial tree |
 
 
@@ -197,8 +198,8 @@ src/quant_risk/
 ├── data/
 │   ├── base.py         # CentralBankClient ABC
 │   ├── ecb.py          # ECBClient -- ESTR, NSS, MMSR, FX
-│   ├── external.py     # External registry and store with a generic series wraper
-│   └── bcb.py          # BCBClient -- CDI, Selic
+│   ├── fed.py          # FedClient -- SOFR, US Treasury CMT
+│   └── external_store.py  # ExternalStore -- yfinance, FF factors, GPR
 └── instruments/
     ├── base.py         # Instrument ABC
     ├── bond.py         # Bond -- OIS discounting, z-spread, key rate DV01
@@ -211,7 +212,7 @@ src/quant_risk/
 **Design principles:** abstract base classes, dependency injection, no global state,
 QuantLib global clock managed explicitly.
 
-**Tests:** 23+ tests, all passing.
+**Tests:** 184+ tests, all passing.
 
 ---
 
@@ -234,7 +235,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
-cp .env.example .env        # add FRED_API_KEY
+echo "FRED_API_KEY=your_key_here" > .env
 jupyter lab
 ```
 
