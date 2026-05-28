@@ -114,19 +114,21 @@ class IRSwap(Instrument):
         dict with keys: npv, fixed_leg_npv, float_leg_npv,
                         par_rate, fixed_rate
         """
-        swap, _, _ = self._build_swap(curve)
-        npv           = swap.NPV()
-        par_rate      = swap.fairRate() * 100
-        fixed_leg_npv = swap.fixedLegNPV()
-        float_leg_npv = swap.floatingLegNPV()
+        def _impl():
+            swap, _, _ = self._build_swap(curve)
+            npv           = swap.NPV()
+            par_rate      = swap.fairRate() * 100
+            fixed_leg_npv = swap.fixedLegNPV()
+            float_leg_npv = swap.floatingLegNPV()
+            return {
+                "npv"           : round(npv, 2),
+                "fixed_leg_npv" : round(fixed_leg_npv, 2),
+                "float_leg_npv" : round(float_leg_npv, 2),
+                "par_rate"      : round(par_rate, 4),
+                "fixed_rate"    : round(self._fixed_rate * 100, 4),
+            }
 
-        return {
-            "npv"           : round(npv, 2),
-            "fixed_leg_npv" : round(fixed_leg_npv, 2),
-            "float_leg_npv" : round(float_leg_npv, 2),
-            "par_rate"      : round(par_rate, 4),
-            "fixed_rate"    : round(self._fixed_rate * 100, 4),
-        }
+        return self._with_eval_date(self._ql_valuation_date, _impl)
 
     def par_rate(self, curve: DiscountCurve) -> float:
         """
@@ -163,9 +165,12 @@ class IRSwap(Instrument):
         float
             DV01 in currency units per 1bp.
         """
-        npv_base = self.price(curve)["npv"]
-        npv_up   = self._npv_bumped(curve, bump)
-        return round(npv_base - npv_up, 2)
+        def _impl():
+            npv_base = self.price(curve)["npv"]
+            npv_up   = self._npv_bumped(curve, bump)
+            return round(npv_base - npv_up, 2)
+
+        return self._with_eval_date(self._ql_valuation_date, _impl)
 
     def duration(self, curve: DiscountCurve) -> float:
         """
@@ -207,25 +212,25 @@ class IRSwap(Instrument):
             # use our actual pillar tenors, not FRTB vertices
             tenors = [0.0, 1/12, 2/12, 3/12, 6/12, 9/12, 1, 2, 3, 5, 10, 15]
 
-        ql.Settings.instance().evaluationDate = self._ql_valuation_date
-        dates, ois_rates, euribor_rates = self._pillar_rates(curve)
-        npv_base = self._npv_from_pillars(dates, ois_rates, euribor_rates, curve)
-
-        result = {}
-        for i, tenor in enumerate(tenors):
-            if i >= len(ois_rates):
-                break
-            ois_up    = ois_rates.copy()
-            eur_up    = euribor_rates.copy()
-            ois_up[i] += bump
-            eur_up[i] += bump
-            npv_up     = self._npv_from_pillars(dates, ois_up, eur_up, curve)
-            label      = "ON" if tenor == 0.0 else (
-                f"{int(tenor*12)}M" if tenor < 1 else f"{int(tenor)}Y"
+        def _impl():
+            dates, ois_rates, euribor_rates = self._pillar_rates(curve)
+            npv_base = self._npv_from_pillars(dates, ois_rates, euribor_rates, curve)
+            result = {}
+            for i, tenor in enumerate(tenors):
+                if i >= len(ois_rates):
+                    break
+                ois_up    = ois_rates.copy()
+                eur_up    = euribor_rates.copy()
+                ois_up[i] += bump
+                eur_up[i] += bump
+                npv_up     = self._npv_from_pillars(dates, ois_up, eur_up, curve)
+                label      = "ON" if tenor == 0.0 else (
+                    f"{int(tenor*12)}M" if tenor < 1 else f"{int(tenor)}Y"
                 )
-            result[label] = round(npv_base - npv_up, 2)
+                result[label] = round(npv_base - npv_up, 2)
+            return result
 
-        return result
+        return self._with_eval_date(self._ql_valuation_date, _impl)
 
     def describe(self) -> str:
         direction = "Payer" if self._pay_fixed else "Receiver"

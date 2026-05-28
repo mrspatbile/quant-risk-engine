@@ -792,3 +792,110 @@ class TestVanillaOption:
     def test_atm_intrinsic_zero(self, call_option):
         # ATM option -- intrinsic is zero
         assert call_option.cash_flows()['amount'].iloc[0] == 0.0
+
+
+# ------------------------------------------------------------------
+# Global QuantLib clock isolation tests (QRE-88 / QRE-89)
+# ------------------------------------------------------------------
+
+import pandas as pd
+
+
+def _make_ois_curve(val_date_str: str) -> OISCurve:
+    """Synthetic OIS curve at an arbitrary valuation date."""
+    data = pd.DataFrame(
+        {
+            "years":           [1/12, 3/12, 6/12, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0],
+            "zero_rate_pct":   [2.63, 2.58, 2.48, 2.30, 2.20, 2.15, 2.20, 2.40, 2.50],
+            "discount_factor": [0.998, 0.994, 0.988, 0.977, 0.957, 0.937, 0.895, 0.786, 0.690],
+            "valuation_date":  [val_date_str] * 9,
+        },
+        index=["1M", "3M", "6M", "12M", "2Y", "3Y", "5Y", "10Y", "10Y+"],
+    )
+    data.index.name = "maturity"
+    return OISCurve(data)
+
+
+class TestEvalDateIsolation:
+    """
+    The QuantLib global clock must be left unchanged after every public pricing call.
+    Without _with_eval_date these tests would fail: price/dv01/key_rate_dv01 all
+    mutated ql.Settings.instance().evaluationDate and never restored it.
+    """
+
+    def test_eval_date_restored_after_bond_price(self, curve):
+        bond = Bond(
+            isin="ISO001", face_value=1_000_000, coupon_rate=2.5,
+            issue_date="2023-01-01", maturity_date="2028-01-01",
+        )
+        prev = ql.Settings.instance().evaluationDate
+        bond.price(curve)
+        assert ql.Settings.instance().evaluationDate == prev
+
+    def test_eval_date_restored_after_bond_dv01(self, curve):
+        bond = Bond(
+            isin="ISO002", face_value=1_000_000, coupon_rate=2.5,
+            issue_date="2023-01-01", maturity_date="2028-01-01",
+        )
+        prev = ql.Settings.instance().evaluationDate
+        bond.dv01(curve)
+        assert ql.Settings.instance().evaluationDate == prev
+
+    def test_eval_date_restored_after_bond_key_rate_dv01(self, curve):
+        bond = Bond(
+            isin="ISO003", face_value=1_000_000, coupon_rate=2.5,
+            issue_date="2023-01-01", maturity_date="2028-01-01",
+        )
+        prev = ql.Settings.instance().evaluationDate
+        bond.key_rate_dv01(curve)
+        assert ql.Settings.instance().evaluationDate == prev
+
+    def test_eval_date_restored_after_swap_price(self, curve):
+        swap = IRSwap(
+            notional=5_000_000, maturity_years=5,
+            fixed_rate=2.5, valuation_date="2026-03-24",
+        )
+        prev = ql.Settings.instance().evaluationDate
+        swap.price(curve)
+        assert ql.Settings.instance().evaluationDate == prev
+
+    def test_eval_date_restored_after_swap_dv01(self, curve):
+        swap = IRSwap(
+            notional=5_000_000, maturity_years=5,
+            fixed_rate=2.5, valuation_date="2026-03-24",
+        )
+        prev = ql.Settings.instance().evaluationDate
+        swap.dv01(curve)
+        assert ql.Settings.instance().evaluationDate == prev
+
+    def test_two_bonds_different_val_dates_price_consistently(self):
+        """
+        Price bond_a with curve_a, then bond_b with curve_b, then bond_a again.
+        Without the fix, bond_b's pricing leaves its val date set and subsequent
+        bond_a pricing could be affected.  With the fix, results are stable.
+        """
+        curve_a = _make_ois_curve("2026-01-01")
+        curve_b = _make_ois_curve("2026-07-01")
+
+        bond_a = Bond(
+            isin="BONDA", face_value=1_000_000, coupon_rate=2.5,
+            issue_date="2023-01-01", maturity_date="2028-01-01",
+        )
+        bond_b = Bond(
+            isin="BONDB", face_value=1_000_000, coupon_rate=3.0,
+            issue_date="2023-07-01", maturity_date="2033-07-01",
+        )
+
+        price_a1 = bond_a.price(curve_a)["clean_price"]
+        price_b1 = bond_b.price(curve_b)["clean_price"]
+
+        # reverse order — would surface stale-date pollution before the fix
+        price_b2 = bond_b.price(curve_b)["clean_price"]
+        price_a2 = bond_a.price(curve_a)["clean_price"]
+
+        assert price_a1 == price_a2, (
+            f"Bond A price changed across calls: {price_a1} vs {price_a2}"
+        )
+        assert price_b1 == price_b2, (
+            f"Bond B price changed across calls: {price_b1} vs {price_b2}"
+        )

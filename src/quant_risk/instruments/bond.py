@@ -110,41 +110,49 @@ class Bond(Instrument):
         dict with keys: clean_price, dirty_price, accrued,
                         ytm, duration, convexity, dv01
         """
-        engine = self._build_engine(curve)
-        self._ql_bond.setPricingEngine(engine)
+        val_date = self._valuation_date(curve)
 
-        dirty_price = self._ql_bond.dirtyPrice()
-        clean_price = self._ql_bond.cleanPrice()
-        accrued     = self._ql_bond.accruedAmount()
-        ytm         = self._ql_bond.bondYield(
-            self._day_count, ql.Compounded, ql.Annual
-        ) * 100
-        ir          = ql.InterestRate(
-            ytm / 100, self._day_count, ql.Compounded, ql.Annual
-        )
-        duration    = ql.BondFunctions.duration(
-            self._ql_bond, ir, ql.Duration.Modified
-        )
-        convexity   = ql.BondFunctions.convexity(self._ql_bond, ir)
-        dv01        = dirty_price * duration / 10000
+        def _impl():
+            engine = self._build_engine(curve)
+            self._ql_bond.setPricingEngine(engine)
+            dirty_price = self._ql_bond.dirtyPrice()
+            clean_price = self._ql_bond.cleanPrice()
+            accrued     = self._ql_bond.accruedAmount()
+            ytm         = self._ql_bond.bondYield(
+                self._day_count, ql.Compounded, ql.Annual
+            ) * 100
+            ir          = ql.InterestRate(
+                ytm / 100, self._day_count, ql.Compounded, ql.Annual
+            )
+            duration    = ql.BondFunctions.duration(
+                self._ql_bond, ir, ql.Duration.Modified
+            )
+            convexity   = ql.BondFunctions.convexity(self._ql_bond, ir)
+            dv01        = dirty_price * duration / 10000
+            return {
+                "clean_price" : round(clean_price, 4),
+                "dirty_price" : round(dirty_price, 4),
+                "accrued"     : round(accrued, 4),
+                "ytm"         : round(ytm, 4),
+                "duration"    : round(duration, 4),
+                "convexity"   : round(convexity, 4),
+                "dv01"        : round(dv01, 4),
+            }
 
-        return {
-            "clean_price" : round(clean_price, 4),
-            "dirty_price" : round(dirty_price, 4),
-            "accrued"     : round(accrued, 4),
-            "ytm"         : round(ytm, 4),
-            "duration"    : round(duration, 4),
-            "convexity"   : round(convexity, 4),
-            "dv01"        : round(dv01, 4),
-        }
+        return self._with_eval_date(val_date, _impl)
 
     def dv01(self, curve: DiscountCurve, bump: float = 0.0001) -> float:
         """
         DV01 via parallel bump of OIS curve by 1bp.
         """
-        p_base = self.price(curve)["dirty_price"]
-        p_up   = self._price_bumped(curve, bump)
-        return round((p_base - p_up) * self._face_value / 100, 2)
+        val_date = self._valuation_date(curve)
+
+        def _impl():
+            p_base = self.price(curve)["dirty_price"]
+            p_up   = self._price_bumped(curve, bump)
+            return round((p_base - p_up) * self._face_value / 100, 2)
+
+        return self._with_eval_date(val_date, _impl)
 
     def duration(self, curve: DiscountCurve) -> float:
         """Modified duration in years."""
@@ -193,21 +201,21 @@ class Bond(Instrument):
             tenors = self._FRTB_VERTICES
 
         val_date = self._valuation_date(curve)
-        ql.Settings.instance().evaluationDate = val_date
 
-        dates, rates = self._curve_pillars(curve, val_date)
-        base_price   = self._price_from_pillars(dates, rates)
+        def _impl():
+            dates, rates = self._curve_pillars(curve, val_date)
+            base_price   = self._price_from_pillars(dates, rates)
+            result = {}
+            for i, tenor in enumerate(tenors):
+                rates_up    = rates.copy()
+                rates_up[i + 1] += bump
+                price_up    = self._price_from_pillars(dates, rates_up)
+                dv01_kr     = (base_price - price_up) * self._face_value / 100
+                label       = f"{int(tenor*12)}M" if tenor < 1 else f"{int(tenor)}Y"
+                result[label] = round(dv01_kr, 2)
+            return result
 
-        result = {}
-        for i, tenor in enumerate(tenors):
-            rates_up    = rates.copy()
-            rates_up[i + 1] += bump
-            price_up    = self._price_from_pillars(dates, rates_up)
-            dv01_kr     = (base_price - price_up) * self._face_value / 100
-            label       = f"{int(tenor*12)}M" if tenor < 1 else f"{int(tenor)}Y"
-            result[label] = round(dv01_kr, 2)
-
-        return result
+        return self._with_eval_date(val_date, _impl)
 
     def z_spread(
         self,
