@@ -16,3 +16,5 @@ logs/
 *.png
 *_old.ipynb
 *_fixed.ipynb
+notebooks/05_fund_risk/liquidity_fund_risk.ipynb
+notebooks/06_portfolio_management/portfolio_risk_factor_models.ipynb
