@@ -6,19 +6,27 @@ This file tells Claude Code how to work in this repository. Read it before doing
 
 ## What this project is
 
-A Python-based quantitative risk framework built on QuantLib. It covers both banking
-and asset management use cases in a European regulatory context. The scope includes
-yield curve construction, fixed-income and derivatives pricing, IRRBB and FRTB SA
-regulatory metrics, AIFMD fund liquidity risk, and portfolio management. Two Streamlit
-dashboards are active: one for fund liquidity risk, one for ETF liquidity stress
-(in progress).
+A Python-based quantitative risk framework built on QuantLib, covering banking and
+asset management use cases in a European regulatory context. Scope includes yield
+curve construction, fixed-income and derivatives pricing, stochastic rate and equity
+models, XVA, IRRBB and FRTB SA regulatory metrics, AIFMD fund liquidity risk, and
+portfolio management.
 
-The codebase is production-oriented. Regulatory accuracy matters. A wrong number here
-is not just a bug — it can be a reportable compliance incident.
+The library under `src/quant_risk/` is the core infrastructure: production-quality
+implementations of curves, instruments, models, and risk metrics, built on QuantLib
+and real market data sources. The notebooks consume this infrastructure — they derive
+the mathematics, walk through the implementation, and demonstrate the full
+computation chain from market data ingestion to regulatory output. They are worked
+examples of a real system, not standalone scripts. Two Streamlit dashboards expose
+selected outputs interactively: one for fund liquidity risk, one for ETF liquidity
+stress (in progress).
 
-There is a separate project, manco-risk-mngmt, that is a structured learning
-environment covering similar regulatory territory. Do not conflate the two. That
-project has intentional simplifications. This one does not.
+Regulatory accuracy is non-negotiable. A wrong number here is not just a bug — it
+can be a reportable compliance incident.
+
+There is a separate project, manco-risk-mngmt, that covers similar regulatory
+territory with intentional simplifications for learning purposes. Do not conflate
+the two. This project has none of those simplifications.
 
 ---
 
