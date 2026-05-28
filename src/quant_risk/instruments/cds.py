@@ -283,11 +283,6 @@ class CreditDefaultSwap(Instrument):
         )
         return cds
 
-    def _disc_handle_from_curve(
-        self, curve: DiscountCurve
-    ) -> ql.YieldTermStructureHandle:
-        """Extract QuantLib handle from DiscountCurve wrapper."""
-        return ql.YieldTermStructureHandle(curve._ql_curve)
 
     # ── Instrument ABC implementation ─────────────────────────────────────────
 

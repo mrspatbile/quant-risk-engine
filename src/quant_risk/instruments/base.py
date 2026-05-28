@@ -11,6 +11,7 @@ on this abstraction, never on concrete implementations.
 from abc import ABC, abstractmethod
 import pandas as pd
 import numpy as np
+import QuantLib as ql
 from quant_risk.curves.base import DiscountCurve
 
 
@@ -176,3 +177,15 @@ class Instrument(ABC):
             f"currency={self.currency} | "
             f"notional={self.notional:,.0f}"
         )
+
+    def _disc_handle_from_curve(
+        self, curve: "DiscountCurve"
+    ) -> ql.YieldTermStructureHandle:
+        """
+        Extract a QuantLib discount handle from a DiscountCurve wrapper.
+
+        Single access point for curve._ql_curve across all instrument pricers.
+        Centralised here so a refactor of OISCurve internals has one breakage
+        point instead of one per instrument.
+        """
+        return ql.YieldTermStructureHandle(curve._ql_curve)

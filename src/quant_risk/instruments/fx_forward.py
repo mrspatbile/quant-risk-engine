@@ -164,10 +164,6 @@ class FXForward(Instrument):
 
     # ── internal helpers ──────────────────────────────────────────────────────
 
-    def _disc_handle_from_curve(
-        self, curve: DiscountCurve
-    ) -> ql.YieldTermStructureHandle:
-        return ql.YieldTermStructureHandle(curve._ql_curve)
 
     def _df_eur(self, eur_handle: ql.YieldTermStructureHandle) -> float:
         """EUR OIS discount factor to maturity."""

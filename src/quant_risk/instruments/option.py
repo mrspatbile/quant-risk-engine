@@ -122,9 +122,6 @@ class VanillaOption(Instrument):
         option.setPricingEngine(self._ql_engine(disc_handle))
         return option
 
-    def _disc_handle_from_curve(self, curve: DiscountCurve) -> ql.YieldTermStructureHandle:
-        return ql.YieldTermStructureHandle(curve._ql_curve)
-
     # ── Instrument ABC implementation ─────────────────────────────────────────
 
     @property
