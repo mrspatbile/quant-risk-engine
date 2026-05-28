@@ -1,5 +1,8 @@
 from pathlib import Path
 import pandas as pd
+from quant_risk.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class CacheMixin:
@@ -28,8 +31,10 @@ class CacheMixin:
     def _load_cache(self, name: str) -> pd.Series | pd.DataFrame | None:
         path = self._cache_path(name)
         if not path.exists():
+            logger.debug("cache miss: %s", name)
             return None
         df = pd.read_parquet(path)
+        logger.debug("cache hit: %s (%d rows)", name, len(df))
         if df.shape[1] == 1:
             return df.iloc[:, 0].rename(df.columns[0])
         return df
@@ -40,6 +45,7 @@ class CacheMixin:
             s.to_frame(name=name).to_parquet(path)
         else:
             s.to_parquet(path)
+        logger.debug("cache write: %s (%d rows)", name, len(s))
 
     def clear_cache(self, names: str | list[str] | None = None) -> None:
         """
