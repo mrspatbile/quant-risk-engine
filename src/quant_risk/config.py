@@ -9,6 +9,7 @@ load_dotenv(_project_root / ".env")
 PROJECT_ROOT  = _project_root
 CACHE_DIR     = PROJECT_ROOT / "data" / "cache"
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+LOGS_DIR      = PROJECT_ROOT / "logs"
 
 # API keys
 FRED_API_KEY = os.getenv("FRED_API_KEY", "").strip()
