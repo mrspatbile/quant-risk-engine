@@ -1,4 +1,9 @@
+![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
+![QuantLib](https://img.shields.io/badge/QuantLib-1.42.1-orange)
+![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?logo=streamlit&logoColor=white)
 ![Tests](https://github.com/mrspatbile/quant-risk-engine/actions/workflows/test.yml/badge.svg)
+![Regulatory](https://img.shields.io/badge/Regulatory-IRRBB%20%7C%20FRTB%20SA%20%7C%20AIFMD%20II-1a1a2e)
+
 
 # Quant Risk Engine
 
