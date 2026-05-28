@@ -47,6 +47,10 @@ class FedClient(CentralBankClient):
             Free FRED API key from fred.stlouisfed.org
         """
         self.api_key = api_key
+        
+        if not self.api_key:
+            raise ValueError("FRED API key must be a non-empty string")
+
 
     @property
     def day_count_convention(self) -> str:

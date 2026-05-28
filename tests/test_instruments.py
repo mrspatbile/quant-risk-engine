@@ -80,6 +80,32 @@ class TestBond:
         cf = bund.cash_flows()
         assert (cf["type"] == "coupon").sum() > 0
 
+class TestBondValidation:
+    def test_negative_face_value_raises(self):
+        with pytest.raises(ValueError, match="face_value"):
+            Bond(isin="X", face_value=-1, coupon_rate=2.0,
+                 issue_date="2023-01-01", maturity_date="2028-01-01")
+
+    def test_zero_face_value_raises(self):
+        with pytest.raises(ValueError):
+            Bond(isin="X", face_value=0, coupon_rate=2.0,
+                 issue_date="2023-01-01", maturity_date="2028-01-01")
+
+    def test_negative_coupon_raises(self):
+        with pytest.raises(ValueError, match="coupon_rate"):
+            Bond(isin="X", face_value=1_000_000, coupon_rate=-1.0,
+                 issue_date="2023-01-01", maturity_date="2028-01-01")
+
+    def test_zero_coupon_is_valid(self):
+        Bond(isin="X", face_value=1_000_000, coupon_rate=0.0,
+             issue_date="2023-01-01", maturity_date="2028-01-01")
+
+    def test_maturity_before_issue_raises(self):
+        with pytest.raises(ValueError, match="maturity_date"):
+            Bond(isin="X", face_value=1_000_000, coupon_rate=2.0,
+                 issue_date="2028-01-01", maturity_date="2023-01-01")
+
+
 
 # ------------------------------------------------------------------
 # IRSwap tests
@@ -150,6 +176,22 @@ class TestIRSwap:
         kr = swap.key_rate_dv01(curve)
         assert abs(kr["5Y"]) == max(abs(v) for v in kr.values())
 
+
+class TestIRSwapValidation:
+    def test_zero_notional_raises(self):
+        with pytest.raises(ValueError, match="notional"):
+            IRSwap(notional=0, maturity_years=5, fixed_rate=2.5,
+                   valuation_date="2026-03-24")
+
+    def test_zero_maturity_raises(self):
+        with pytest.raises(ValueError, match="maturity_years"):
+            IRSwap(notional=1_000_000, maturity_years=0, fixed_rate=2.5,
+                   valuation_date="2026-03-24")
+
+    def test_negative_fixed_rate_raises(self):
+        with pytest.raises(ValueError, match="fixed_rate"):
+            IRSwap(notional=1_000_000, maturity_years=5, fixed_rate=-1.0,
+                   valuation_date="2026-03-24")
 
 # ------------------------------------------------------------------
 # CreditDefaultSwap tests

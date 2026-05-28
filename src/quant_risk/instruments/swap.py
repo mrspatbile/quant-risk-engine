@@ -91,6 +91,7 @@ class IRSwap(Instrument):
         self._currency           = currency
         self._euribor_spread     = euribor_spread_bps / 10000
         self._settlement_days    = settlement_days
+        self._validate()
         self._ql_valuation_date  = self._parse_date(valuation_date)
 
     # ------------------------------------------------------------------
@@ -385,3 +386,13 @@ class IRSwap(Instrument):
         )
         swap.setPricingEngine(ql.DiscountingSwapEngine(ois_handle))
         return swap.NPV()
+    
+    def _validate(self) -> None:
+        if self._notional <= 0:
+            raise ValueError(f"notional must be positive, got {self._notional}")
+        if self._maturity_years <= 0:
+            raise ValueError(f"maturity_years must be positive, got {self._maturity_years}")
+        if self._fixed_rate < 0:
+            raise ValueError(f"fixed_rate must be >= 0, got {self._fixed_rate * 100}")
+
+    

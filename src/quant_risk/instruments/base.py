@@ -236,6 +236,11 @@ class Instrument(ABC):
         """Parse ISO date string 'YYYY-MM-DD' to QuantLib Date."""
         parts = date_str.split("-")
         return ql.Date(int(parts[2]), int(parts[1]), int(parts[0]))
+    
+    def _validate(self) -> None:
+        """Override in concrete classes to validate constructor arguments."""
+        pass
+
 
     @staticmethod
     def _with_eval_date(date: ql.Date, fn):

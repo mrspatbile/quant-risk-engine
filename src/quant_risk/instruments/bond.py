@@ -87,6 +87,7 @@ class Bond(Instrument):
         self._currency        = currency
         self._settlement_days = settlement_days
         self._frequency       = frequency
+        self._validate()        
         self._ql_bond         = self._build_ql_bond()
 
     # ------------------------------------------------------------------
@@ -351,3 +352,14 @@ class Bond(Instrument):
         engine = ql.DiscountingBondEngine(ql.YieldTermStructureHandle(zc))
         self._ql_bond.setPricingEngine(engine)
         return self._ql_bond.dirtyPrice()
+    
+    def _validate(self) -> None:
+        if self._face_value <= 0:
+            raise ValueError(f"face_value must be positive, got {self._face_value}")
+        if self._coupon_rate < 0:
+            raise ValueError(f"coupon_rate must be >= 0, got {self._coupon_rate}")
+        if self._maturity_date <= self._issue_date:
+            raise ValueError("maturity_date must be after issue_date")
+        if self._settlement_days < 0:
+            raise ValueError(f"settlement_days must be >= 0, got {self._settlement_days}")
+
