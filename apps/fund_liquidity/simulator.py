@@ -154,7 +154,7 @@ class FundLiquiditySimulator:
         return {
             'detail':     inv[['type', 'aum', 'redemption_eur']],
             'total_eur':  total,
-            'total_pct':  total / self.nav * 100,
+            'total_pct':  total / self.nav * 100 if self.nav > 0 else np.nan,
         }
 
     def liquidity_coverage(self) -> pd.DataFrame:
@@ -181,23 +181,24 @@ class FundLiquiditySimulator:
         normal = self.redemption_profile('normal')
         stress = self.redemption_profile('stress')
 
+        nav_guard = self.nav if self.nav > 0 else np.nan
         return pd.DataFrame([
             {
                 'scenario':          'Normal',
                 'available_eur':     available,
-                'available_pct_nav': available / self.nav * 100,
+                'available_pct_nav': available / nav_guard * 100,
                 'redemption_eur':    normal['total_eur'],
                 'redemption_pct_nav':normal['total_pct'],
-                'lcr':               available / normal['total_eur'],
+                'lcr':               available / normal['total_eur'] if normal['total_eur'] > 0 else (np.inf if available > 0 else np.nan),
                 'pass':              available >= normal['total_eur'],
             },
             {
                 'scenario':          'Stress',
                 'available_eur':     available,
-                'available_pct_nav': available / self.nav * 100,
+                'available_pct_nav': available / nav_guard * 100,
                 'redemption_eur':    stress['total_eur'],
                 'redemption_pct_nav':stress['total_pct'],
-                'lcr':               available / stress['total_eur'],
+                'lcr':               available / stress['total_eur'] if stress['total_eur'] > 0 else (np.inf if available > 0 else np.nan),
                 'pass':              available >= stress['total_eur'],
             },
         ])
