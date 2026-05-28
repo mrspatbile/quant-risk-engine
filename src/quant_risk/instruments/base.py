@@ -237,3 +237,19 @@ class Instrument(ABC):
         parts = date_str.split("-")
         return ql.Date(int(parts[2]), int(parts[1]), int(parts[0]))
 
+    @staticmethod
+    def _with_eval_date(date: ql.Date, fn):
+        """Execute fn with the QuantLib global evaluation date set to date.
+
+        Saves the prior value and restores it in a finally block, so the
+        process-global clock is always left in the state it was found — even
+        if fn raises. Every public pricing method must call this instead of
+        setting ql.Settings.instance().evaluationDate directly.
+        """
+        prev = ql.Settings.instance().evaluationDate
+        try:
+            ql.Settings.instance().evaluationDate = date
+            return fn()
+        finally:
+            ql.Settings.instance().evaluationDate = prev
+
