@@ -230,3 +230,10 @@ class Instrument(ABC):
                 abs(float(v.replace('Y', '')) - maturity) for v in labels
             ) else 0.0
         return result
+    
+    @staticmethod
+    def _parse_date(date_str: str) -> ql.Date:
+        """Parse ISO date string 'YYYY-MM-DD' to QuantLib Date."""
+        parts = date_str.split("-")
+        return ql.Date(int(parts[2]), int(parts[1]), int(parts[0]))
+

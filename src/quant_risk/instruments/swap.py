@@ -241,11 +241,6 @@ class IRSwap(Instrument):
     # private helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _parse_date(date_str: str) -> ql.Date:
-        parts = date_str.split("-")
-        return ql.Date(int(parts[2]), int(parts[1]), int(parts[0]))
-
     def _pillar_rates(self, curve: DiscountCurve) -> tuple:
         """Extract OIS and EURIBOR pillar dates and rates."""
         tenors = [0.0, 1/12, 2/12, 3/12, 6/12, 9/12, 1, 2, 3, 5, 10, 15]

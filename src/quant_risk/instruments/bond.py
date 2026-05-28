@@ -267,12 +267,6 @@ class Bond(Instrument):
     # private helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _parse_date(date_str: str) -> ql.Date:
-        """Parse ISO date string to QuantLib Date."""
-        parts = date_str.split("-")
-        return ql.Date(int(parts[2]), int(parts[1]), int(parts[0]))
-
     def _build_ql_bond(self) -> ql.FixedRateBond:
         schedule = ql.Schedule(
         self._issue_date,          # effectiveDate
