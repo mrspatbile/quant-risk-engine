@@ -71,7 +71,6 @@ class IRSwap(Instrument):
     _float_dc         = ql.Actual360()
     _fixed_freq       = ql.Annual
     _float_freq       = ql.Quarterly
-    _FRTB_VERTICES    = [0.25, 0.5, 1, 2, 3, 5, 10, 15, 20, 30]
 
     def __init__(
         self,

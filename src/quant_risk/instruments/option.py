@@ -187,17 +187,10 @@ class VanillaOption(Instrument):
         Rho per FRTB GIRR tenor vertex.
         Concentrates at the expiry tenor.
         """
-        frtb_vertices = ['0.25Y','0.5Y','1Y','2Y','3Y','5Y','10Y','15Y','20Y','30Y']
-        vertices      = tenors or frtb_vertices
+        vertices      = tenors or self._FRTB_VERTEX_LABELS
         rho_total     = self.dv01(curve, bump)
+        return self._nearest_frtb_vertex(rho_total, self._T, vertices)
 
-        result = {}
-        for label in vertices:
-            t = float(label.replace('Y', ''))
-            result[label] = rho_total if abs(t - self._T) == min(
-                abs(float(v.replace('Y', '')) - self._T) for v in vertices
-            ) else 0.0
-        return result
 
     # ── option-specific methods ───────────────────────────────────────────────
 

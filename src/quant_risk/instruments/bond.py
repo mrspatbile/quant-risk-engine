@@ -67,7 +67,6 @@ class Bond(Instrument):
 
     _calendar         = ql.TARGET()
     _day_count        = ql.ActualActual(ql.ActualActual.Bond)
-    _FRTB_VERTICES    = [0.25, 0.5, 1, 2, 3, 5, 10, 15, 20, 30]
 
     def __init__(
         self,

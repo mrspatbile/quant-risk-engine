@@ -34,6 +34,10 @@ class Instrument(ABC):
     FXForward     -- FX forward via covered interest rate parity
     VanillaOption -- European option via Black-Scholes-Merton
     """
+    
+    _FRTB_VERTICES: list = [0.25, 0.5, 1, 2, 3, 5, 10, 15, 20, 30]
+    _FRTB_VERTEX_LABELS: list = ['0.25Y','0.5Y','1Y','2Y','3Y','5Y','10Y','15Y','20Y','30Y']
+
 
     @property
     @abstractmethod
@@ -189,3 +193,40 @@ class Instrument(ABC):
         point instead of one per instrument.
         """
         return ql.YieldTermStructureHandle(curve._ql_curve)
+
+    def _nearest_frtb_vertex(
+        self, sensitivity: float, maturity: float, vertices: list = None
+    ) -> dict:
+        """
+        Assign a scalar sensitivity to the nearest FRTB tenor vertex.
+
+        Used by single-maturity instruments (FXForward, VanillaOption) where
+        all IR or FX sensitivity concentrates at one tenor bucket.
+        CRR3 Article 325 prescribed vertices: 0.25Y to 30Y.
+
+        Parameters
+        ----------
+        sensitivity : float
+            Total sensitivity in currency units.
+        maturity : float
+            Instrument maturity in years.
+        vertices : list, optional
+            Tenor labels e.g. ['0.25Y', '1Y', ...]. Defaults to FRTB labels.
+
+        Returns
+        -------
+        dict
+            {tenor_label: sensitivity} with zero at all non-nearest vertices.
+        """
+        frtb_labels = [
+            f"{int(v*12)}M" if v < 1 else f"{int(v)}Y"
+            for v in self._FRTB_VERTICES
+        ]
+        labels = vertices or self._FRTB_VERTEX_LABELS
+        result = {}
+        for label in labels:
+            t = float(label.replace('Y', ''))
+            result[label] = sensitivity if abs(t - maturity) == min(
+                abs(float(v.replace('Y', '')) - maturity) for v in labels
+            ) else 0.0
+        return result

@@ -260,17 +260,11 @@ class FXForward(Instrument):
         FX forward IR sensitivity concentrates at the maturity tenor.
         All key rate DV01s are zero except at the maturity bucket.
         """
-        frtb_vertices = ['0.25Y','0.5Y','1Y','2Y','3Y','5Y','10Y','15Y','20Y','30Y']
-        vertices      = tenors or frtb_vertices
+        vertices      = tenors or self._FRTB_VERTEX_LABELS
         ir_dv01       = self.dv01(curve, bump)
 
-        result = {}
-        for label in vertices:
-            t = float(label.replace('Y', ''))
-            result[label] = ir_dv01 if abs(t - self._T) == min(
-                abs(float(v.replace('Y', '')) - self._T) for v in vertices
-            ) else 0.0
-        return result
+        return self._nearest_frtb_vertex(ir_dv01, self._T, vertices)
+
 
     # ── FXForward-specific methods ────────────────────────────────────────────
 
