@@ -1,9 +1,7 @@
 ![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
 ![QuantLib](https://img.shields.io/badge/QuantLib-1.42.1-orange)
-![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?logo=streamlit&logoColor=white)
 ![Tests](https://github.com/mrspatbile/quant-risk-engine/actions/workflows/test.yml/badge.svg)
-![Regulatory](https://img.shields.io/badge/Regulatory-IRRBB%20%7C%20FRTB%20SA%20%7C%20AIFMD%20II-1a1a2e)
-
+![Regulatory](https://img.shields.io/badge/Regulatory-IRRBB%20%7C%20FRTB%20SA%20%7C%20AIFMD%20II-e91e8c)
 
 # Quant Risk Engine
 
@@ -11,9 +9,9 @@ Python-based quantitative risk framework built on QuantLib, designed as a modula
 
 Implements market data ingestion (ECB, FRED), yield curve construction, and fixed-income instrument pricing. Includes selected regulatory components, with initial focus on IRRBB-style interest rate risk metrics and exploratory extensions toward FRTB and AIFMD-related use cases.
 
-Extended with a Streamlit dashboard for portfolio and liquidity risk visualisation across fund strategies.
+Another repo consumes the output into Streamlit dashboard for portfolio and liquidity risk visualisation across fund strategies.
 
-**Stack:** Python 3.13 | QuantLib 1.42 | Streamlit | ECB SDW | FRED API  
+**Stack:** Python 3.13 | QuantLib 1.42 | ECB SDW | FRED API  
 **Status:** Actively developed -- Sprint 6 in progress
 
 ---
@@ -28,10 +26,8 @@ Extended with a Streamlit dashboard for portfolio and liquidity risk visualisati
 | FRTB SA -- GIRR delta, key rate DV01 | Done |
 | Fund liquidity risk -- AIFMD II, Annex IV, LMTs | Done |
 | Portfolio Management -- macrofactors, risk-on, riskoff regimes + factor model portf. construction, attribution, hedging | Done |
-| ETF liquidity stress -- creation/redemption mechanism, AP arbitrage breakdown | In progress |
 | Monte Carlo + short rate models | In progress -- Sprint 6 |
 | XVA -- CVA, FVA, MVA + neural network approximator | In progress -- Sprint 6 |
-| Credit risk -- IRB, IFRS 9 ECL | Planned -- Module 7 |
 
 ---
 

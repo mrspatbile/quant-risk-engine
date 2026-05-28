@@ -34,7 +34,6 @@ the two. This project has none of those simplifications.
 
 - Python 3.13
 - QuantLib 1.42.1
-- Streamlit
 - ECB SDW API (no key required)
 - FRED API (key required — set in `.env` as `FRED_API_KEY`)
 - BCB API (planned — `BCB_API_KEY` is wired in `config.py` but no client exists yet)
@@ -44,9 +43,6 @@ the two. This project has none of those simplifications.
 ## Project layout
 
 quant-risk-engine/
-├── apps/
-│   ├── fund_liquidity/     # Streamlit dashboard — AIFMD liquidity risk (active)
-│   └── etf/                # Streamlit dashboard — ETF liquidity stress (in progress)
 ├── data/
 │   ├── cache/              # Parquet cache — ECB, FRED, yfinance, FF factors, GPR
 │   │   └── external/       # ExternalStore cache subdirectory
@@ -205,8 +201,6 @@ very long-dated instruments.
   test suite uses `OISCurve.from_processed()` as a shared fixture — this is a known
   fragility (clean checkout will fail). When adding new tests, build curves
   synthetically in the fixture rather than extending this pattern.
-- `tests/test_risk.py` is empty. The `FundLiquiditySimulator` has no tests at all.
-  This is the highest-priority test gap in the codebase.
 
 ---
 
@@ -261,6 +255,5 @@ pip install -e .
 echo "FRED_API_KEY=your_key_here" > .env
 
 pytest tests/ -v
-streamlit run apps/fund_liquidity/app.py
 jupyter lab
 ```
