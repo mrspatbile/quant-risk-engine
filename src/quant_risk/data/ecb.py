@@ -24,6 +24,9 @@ import requests
 
 # internal
 from quant_risk.data.base import CentralBankClient
+from quant_risk.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +111,15 @@ class ECBClient(CentralBankClient):
             raise ConnectionError(
                 f"ECB API returned {response.status_code} for {url}"
             )
-        return response.json()
+        data = response.json()
+        try:
+            n_obs = len(
+                next(iter(data["dataSets"][0]["series"].values()))["observations"]
+            )
+        except (KeyError, StopIteration):
+            n_obs = 0
+        logger.info("ECB %s/%s — %d observations", dataset, series_key, n_obs)
+        return data
 
     def _parse_observations(self, data: dict) -> pd.Series:
         """

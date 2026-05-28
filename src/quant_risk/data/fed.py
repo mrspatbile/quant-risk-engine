@@ -1,6 +1,9 @@
 import requests
 import pandas as pd
 from quant_risk.data.base import CentralBankClient
+from quant_risk.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
@@ -74,7 +77,9 @@ class FedClient(CentralBankClient):
             for obs in observations
             if obs["value"] != "."
         }
-        return pd.Series(records, name=series_id).sort_index()
+        result = pd.Series(records, name=series_id).sort_index()
+        logger.info("FRED %s — %d observations", series_id, len(result))
+        return result
 
     def get_overnight_rate(self, last_n: int = 252) -> pd.Series:
         """
