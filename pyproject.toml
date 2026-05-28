@@ -18,7 +18,6 @@ dependencies = [
     "pyyaml",
     "yfinance",
     "pandas-datareader",
-    "streamlit",
     "QuantLib",
     "python-dotenv",
     "seaborn",

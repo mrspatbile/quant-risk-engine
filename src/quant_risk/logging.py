@@ -8,8 +8,8 @@ from quant_risk.logging import get_logger
 logger = get_logger(__name__)
 logger.info("fetched %d rows from %s", n, source)
 
-Usage (application code -- Streamlit, scripts)
------------------------------------------------
+Usage (application code -- scripts, entry points)
+-------------------------------------------------
 from quant_risk.logging import configure_file_logging
 configure_file_logging()   # call once at startup
 
@@ -54,7 +54,7 @@ def configure_file_logging(
     Attach a rotating file handler to the quant_risk package root logger.
 
     Safe to call multiple times -- skips setup if a FileHandler is already
-    attached, so Streamlit reruns do not add duplicate handlers.
+    attached, so repeated calls at startup do not add duplicate handlers.
 
     Parameters
     ----------

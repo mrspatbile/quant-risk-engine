@@ -17,9 +17,8 @@ implementations of curves, instruments, models, and risk metrics, built on Quant
 and real market data sources. The notebooks consume this infrastructure — they derive
 the mathematics, walk through the implementation, and demonstrate the full
 computation chain from market data ingestion to regulatory output. They are worked
-examples of a real system, not standalone scripts. Two Streamlit dashboards expose
-selected outputs interactively: one for fund liquidity risk, one for ETF liquidity
-stress (in progress).
+examples of a real system, not standalone scripts. Interactive dashboards built on
+this library live in a separate repository.
 
 Regulatory accuracy is non-negotiable. A wrong number here is not just a bug — it
 can be a reportable compliance incident.

@@ -35,9 +35,6 @@ Another repo consumes the output into Streamlit dashboard for portfolio and liqu
 
 ```
 quant-risk-engine/
-├── apps/
-│   ├── fund_liquidity/ # Streamlit dashboard -- AIFMD liquidity risk
-│   └── etf/            # Streamlit dashboard -- ETF liquidity stress (in progress)
 ├── configs/            # market_config.yaml
 ├── data/
 │   ├── cache/          # Parquet cache -- ECB, FRED, yfinance, FF factors, GPR
@@ -123,11 +120,10 @@ dashboard planned.
 
 ## Module 5 -- Fund Risk
 
-| Notebook / App | Description |
-|----------------|-------------|
+| Notebook | Description |
+|----------|-------------|
 | fund_reg.md | Regulation reference -- AIFMD, AIFMD II, UCITS, IFRS 13, Luxembourg vehicles |
 | liquidity_fund_risk.ipynb | Full AIFMD liquidity risk framework -- bucketing, LCR, stress testing, Annex IV, LMT simulation |
-| apps/fund_liquidity/ | Streamlit dashboard -- interactive liquidity risk analysis for four fund types |
 
 **Fund types covered:** Multi-asset AIF, Credit AIF (IG/HY/CLO/private credit),
 Leveraged AIF (long/short equity with derivatives), Real Estate AIF (REITs + direct property).
@@ -138,25 +134,6 @@ ESMA34-671404336-1364 board-decision framework.
 
 **Regulatory basis:** Delegated Regulation 231/2013, AIFMD II Directive 2024/927/EU,
 ESMA34-671404336-1364 (Guidelines on LMTs, April 2025), ESMA/2013/232 (Annex IV).
-
-
-Implemented as STREAMLIT DASHBOARD
-
-ETF-specific liquidity risk analysis covering the creation/redemption mechanism
-under market stress. Covers four ETF types common in the Luxembourg UCITS market:
-
-| ETF | Underlying | Key risk |
-|-----|-----------|---------|
-| Equity ETF | EuroStoxx 50 large caps | Bid-ask widening, tracking error under stress |
-| Fixed Income ETF | EUR IG corporate bonds | Underlying illiquidity drives premium/discount |
-| Smart Beta ETF | Factor -- value + low vol | Mixed liquidity profile, rebalancing risk |
-| Commodity ETF | Physically backed / swap-based | Collateral liquidity, roll cost |
-
-**Metrics:** tracking error, tracking difference, premium/discount to NAV,
-authorised participant arbitrage cost, creation/redemption breakdown indicator.
-
-**Regulatory basis:** ESMA guidelines on ETF liquidity under stressed conditions,
-UCITS Directive 2009/65/EC, PRIIPs Regulation 1286/2014.
 
 ---
 
@@ -238,12 +215,6 @@ pip install -r requirements.txt
 pip install -e .
 echo "FRED_API_KEY=your_key_here" > .env
 jupyter lab
-```
-
-**Run the fund liquidity dashboard:**
-
-```bash
-streamlit run apps/fund_liquidity/app.py
 ```
 
 ---
