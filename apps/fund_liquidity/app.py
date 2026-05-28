@@ -18,6 +18,18 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from simulator import FundLiquiditySimulator, BUCKET_LABELS
 
+# ── logging -- file only, not Streamlit UI ────────────────────────────────────
+# st.cache_resource ensures this runs once per server process, not once per
+# rerun, so handlers are never duplicated across user interactions.
+@st.cache_resource
+def _setup_logging():
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+    from quant_risk.logging import configure_file_logging
+    configure_file_logging()
+
+_setup_logging()
+
 # ── page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title='Fund Liquidity Risk',
