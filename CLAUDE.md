@@ -210,15 +210,18 @@ QuantLib global state context manager, structured logging, input validation).
 
 Current sprint (Sprint 6) covers Module 3 — Monte Carlo simulations and XVA:
 
-- **QRE-48** MC interest rate paths notebook — antithetic sampling
-- **QRE-49** MC bond and swap pricing notebook — convergence analysis
-- **QRE-50** MC equity paths notebook — GBM, local vol
-- **QRE-51** MC simulator OOP class
-- **QRE-53** CVA notebook — expected exposure, default modelling
-- **QRE-54** FVA notebook — funding cost, CSA impact, OIS vs SOFR
-- **QRE-55** MVA notebook — initial margin, SIMM methodology
-- **QRE-56** XVA aggregation notebook — CVA + DVA + FVA
-- **QRE-57** XVA OOP class
+- **QRE-47** MC simulator
+  - **QRE-48** MC interest rate paths notebook — antithetic sampling
+  - **QRE-49** MC bond and swap pricing notebook — convergence analysis
+  - **QRE-50** MC equity paths notebook — GBM, local vol
+  - **QRE-51** MC simulator OOP class
+
+- **QRE-52** XVA
+  - **QRE-53** CVA notebook — expected exposure, default modelling
+  - **QRE-54** FVA notebook — funding cost, CSA impact, OIS vs SOFR
+  - **QRE-55** MVA notebook — initial margin, SIMM methodology
+  - **QRE-56** XVA aggregation notebook — CVA + DVA + FVA
+  - **QRE-57** XVA OOP class
 
 When starting a task, ask me for the Jira ticket number to include in the commit
 message.
