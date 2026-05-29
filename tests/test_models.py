@@ -1,7 +1,7 @@
 # tests/test_models.py
 
 """
-Tests for src/quant_risk/models/base.py and models/rates.py.
+Tests for src/quant_risk/models/base.py, models/rates.py, and models/equity.py.
 
 Coverage
 --------
@@ -227,3 +227,128 @@ class TestHullWhiteProcess:
 
     def test_describe_contains_name(self, hw):
         assert "Hull-White" in hw.describe()
+
+
+# ---------------------------------------------------------------------------
+# GBMProcess
+# ---------------------------------------------------------------------------
+
+from quant_risk.models.equity import GBMProcess, LocalVolProcess
+
+
+class TestGBMProcess:
+    @pytest.fixture
+    def gbm(self):
+        return GBMProcess(r=2.5, sigma=20.0)
+
+    def test_output_shape(self, gbm):
+        paths = gbm.simulate(x0=100.0, T=1.0, n_steps=252, n_paths=100, seed=0)
+        assert paths.shape == (100, 253)
+
+    def test_initial_condition(self, gbm):
+        paths = gbm.simulate(x0=100.0, T=1.0, n_steps=252, n_paths=100, seed=0)
+        np.testing.assert_allclose(paths[:, 0], 100.0)
+
+    def test_positive_prices(self, gbm):
+        # GBM exact simulation preserves S > 0 for all paths
+        paths = gbm.simulate(x0=100.0, T=5.0, n_steps=250, n_paths=500, seed=0)
+        assert (paths > 0).all()
+
+    def test_risk_neutral_expectation(self, gbm):
+        # E[S(T)] = S0 * exp((r-q)/100 * T)
+        T     = 1.0
+        S0    = 100.0
+        paths = gbm.simulate(x0=S0, T=T, n_steps=252, n_paths=10000,
+                              antithetic=True, seed=0)
+        expected = S0 * np.exp((gbm.r - gbm.q) / 100 * T)
+        # Allow 0.5% tolerance
+        assert abs(paths[:, -1].mean() - expected) < 0.5 * expected / 100
+
+    def test_seed_reproducibility(self, gbm):
+        p1 = gbm.simulate(x0=100.0, T=1.0, n_steps=52, n_paths=50, seed=7)
+        p2 = gbm.simulate(x0=100.0, T=1.0, n_steps=52, n_paths=50, seed=7)
+        np.testing.assert_array_equal(p1, p2)
+
+    def test_antithetic_shape(self, gbm):
+        paths = gbm.simulate(x0=100.0, T=1.0, n_steps=52, n_paths=100,
+                             antithetic=True, seed=0)
+        assert paths.shape == (100, 53)
+
+    def test_antithetic_log_symmetry(self, gbm):
+        # Antithetic pairs have log-returns that sum to 2 × deterministic drift
+        n_paths, n_steps = 100, 1
+        paths = gbm.simulate(x0=100.0, T=1.0, n_steps=n_steps, n_paths=n_paths,
+                             antithetic=True, seed=0)
+        dt         = 1.0
+        drift_step = ((gbm.r - gbm.q) / 100 - (gbm.sigma / 100) ** 2 / 2) * dt
+        log_ret_base = np.log(paths[:50, 1] / 100.0)
+        log_ret_anti = np.log(paths[50:, 1] / 100.0)
+        # Sum of log-returns of antithetic pair = 2 × drift (noise cancels)
+        np.testing.assert_allclose(
+            log_ret_base + log_ret_anti, 2 * drift_step, rtol=1e-10
+        )
+
+    def test_invalid_sigma_raises(self):
+        with pytest.raises(ValueError):
+            GBMProcess(r=2.5, sigma=0.0)
+
+    def test_describe_contains_name(self, gbm):
+        assert "GBM" in gbm.describe()
+
+
+# ---------------------------------------------------------------------------
+# LocalVolProcess
+# ---------------------------------------------------------------------------
+
+class TestLocalVolProcess:
+    @pytest.fixture
+    def flat_lv(self):
+        # Constant local vol of 20% → should behave like GBM
+        return LocalVolProcess(r=2.5, local_vol_fn=lambda S, t: 20.0)
+
+    def test_output_shape(self, flat_lv):
+        paths = flat_lv.simulate(x0=100.0, T=1.0, n_steps=52, n_paths=100, seed=0)
+        assert paths.shape == (100, 53)
+
+    def test_initial_condition(self, flat_lv):
+        paths = flat_lv.simulate(x0=100.0, T=1.0, n_steps=52, n_paths=100, seed=0)
+        np.testing.assert_allclose(paths[:, 0], 100.0)
+
+    def test_positive_prices(self, flat_lv):
+        paths = flat_lv.simulate(x0=100.0, T=5.0, n_steps=60, n_paths=200, seed=0)
+        assert (paths > 0).all()
+
+    def test_flat_lv_matches_gbm_distribution(self):
+        # With constant σ, LocalVol terminal distribution should match GBM closely
+        r, sigma, S0, T = 2.5, 20.0, 100.0, 1.0
+        gbm  = GBMProcess(r=r, sigma=sigma)
+        lv   = LocalVolProcess(r=r, local_vol_fn=lambda S, t: sigma)
+        n    = 5000
+
+        p_gbm = gbm.simulate(x0=S0, T=T, n_steps=52, n_paths=n, seed=0)
+        p_lv  = lv.simulate(x0=S0,  T=T, n_steps=52, n_paths=n, seed=0)
+
+        # Means should be close (within 1%)
+        assert abs(p_gbm[:, -1].mean() - p_lv[:, -1].mean()) < 1.0
+
+    def test_seed_reproducibility(self, flat_lv):
+        p1 = flat_lv.simulate(x0=100.0, T=1.0, n_steps=52, n_paths=50, seed=3)
+        p2 = flat_lv.simulate(x0=100.0, T=1.0, n_steps=52, n_paths=50, seed=3)
+        np.testing.assert_array_equal(p1, p2)
+
+    def test_vol_surface_affects_distribution(self):
+        # Skewed vol shifts the distribution relative to flat vol
+        r, S0, T = 2.5, 100.0, 1.0
+        flat_lv  = LocalVolProcess(r=r, local_vol_fn=lambda S, t: 20.0)
+        # Higher vol for low S (skew): ITM calls more expensive
+        skew_lv  = LocalVolProcess(
+            r=r, local_vol_fn=lambda S, t: 20.0 + 5.0 * max(100.0 - S, 0) / 100.0
+        )
+        n = 3000
+        p_flat = flat_lv.simulate(x0=S0, T=T, n_steps=52, n_paths=n, seed=0)
+        p_skew = skew_lv.simulate(x0=S0, T=T, n_steps=52, n_paths=n, seed=0)
+        # Skewed vol makes distribution different (higher std due to higher avg vol)
+        assert p_skew[:, -1].std() != p_flat[:, -1].std()
+
+    def test_describe_contains_name(self, flat_lv):
+        assert "LocalVol" in flat_lv.describe()
