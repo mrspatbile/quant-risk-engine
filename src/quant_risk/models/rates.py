@@ -28,6 +28,7 @@ in percent throughout. σ = 1.0 means 1% per √year. This is consistent
 with the project-wide convention in OISCurve and all instrument pricers.
 """
 
+import warnings
 from typing import Optional
 
 import numpy as np
@@ -347,4 +348,166 @@ class HullWhiteProcess(StochasticProcess):
             f"Hull-White | κ={self._kappa:.4f} | "
             f"σ={self._sigma:.4f}%/√yr | "
             f"curve={self._curve.valuation_date}"
+        )
+
+
+class CIRProcess(StochasticProcess):
+    """
+    Cox-Ingersoll-Ross (1985) mean-reverting short rate model.
+
+    SDE
+    ---
+    dr(t) = κ(θ - r(t)) dt + σ √r(t) dW(t)
+
+    The √r diffusion term makes volatility proportional to the square root of
+    the rate level. This, combined with the Feller condition, guarantees
+    r(t) ≥ 0 at all times — the key property distinguishing CIR from Vasicek.
+
+    Feller condition
+    ----------------
+    2κθ > σ² ensures the origin is inaccessible: r(t) stays strictly positive.
+    When 0 < 2κθ ≤ σ², the process can reach zero but remains non-negative.
+    A UserWarning is raised at construction when the condition is not met.
+
+    Simulation method
+    -----------------
+    Exact. The conditional distribution r(t+dt)|r(t) is a scaled non-central
+    chi-squared:
+
+      r(t+dt)|r(t)  ~  c · χ²(d, λ)
+
+      c = σ²(1 - e^{-κdt}) / (4κ)          [scale, in percent]
+      d = 4κθ / σ²                           [degrees of freedom, constant]
+      λ = r(t) · e^{-κdt} / c               [non-centrality, path-dependent]
+
+    Sampled directly via NumPy's noncentral_chisquare. No discretisation error.
+    Non-negativity is structurally guaranteed: χ²(d, λ) ≥ 0 for all d, λ > 0.
+
+    Antithetic variates are not supported. The non-central chi-squared
+    distribution has no simple symmetric pairing analogous to Gaussian ±Z
+    (λ is path-dependent, so antithetic twins diverge after the first step).
+    Passing antithetic=True raises NotImplementedError. Use more paths instead.
+
+    Rate convention
+    ---------------
+    x0 and θ in percent (e.g. 2.5 means 2.5%).
+    σ in √percent/√year — different units from Vasicek. At the long-run mean,
+    the instantaneous vol is σ√θ %/√year. For σ = 0.32 and θ = 2.5%,
+    this equals 0.32·√2.5 ≈ 0.51 %/√year, comparable to a Vasicek σ of 0.51.
+
+    Parameters
+    ----------
+    kappa : float
+        Mean reversion speed in 1/year. Must be positive.
+    theta : float
+        Long-run mean short rate in percent.
+    sigma : float
+        Volatility coefficient in √percent/√year. Must be positive.
+    """
+
+    def __init__(self, kappa: float, theta: float, sigma: float) -> None:
+        if kappa <= 0:
+            raise ValueError(f"kappa must be positive, got {kappa}")
+        if sigma <= 0:
+            raise ValueError(f"sigma must be positive, got {sigma}")
+        if 2.0 * kappa * theta <= sigma ** 2:
+            warnings.warn(
+                f"Feller condition 2κθ > σ² not satisfied "
+                f"(2·{kappa}·{theta} = {2*kappa*theta:.4f} ≤ σ² = {sigma**2:.4f}). "
+                "r(t) may reach zero.",
+                UserWarning,
+                stacklevel=2,
+            )
+        self._kappa = kappa
+        self._theta = theta
+        self._sigma = sigma
+
+    @property
+    def name(self) -> str:
+        return "CIR"
+
+    @property
+    def kappa(self) -> float:
+        """Mean reversion speed in 1/year."""
+        return self._kappa
+
+    @property
+    def theta(self) -> float:
+        """Long-run mean short rate in percent."""
+        return self._theta
+
+    @property
+    def sigma(self) -> float:
+        """Volatility coefficient in √percent/√year."""
+        return self._sigma
+
+    def simulate(
+        self,
+        x0: float,
+        T: float,
+        n_steps: int,
+        n_paths: int,
+        antithetic: bool = False,
+        seed: Optional[int] = None,
+    ) -> np.ndarray:
+        """
+        Simulate CIR paths using the exact non-central chi-squared distribution.
+
+        Parameters
+        ----------
+        x0 : float
+            Initial short rate in percent. Must be >= 0.
+        T : float
+            Time horizon in years.
+        n_steps : int
+            Number of time steps. Step size dt = T / n_steps.
+        n_paths : int
+            Number of paths.
+        antithetic : bool
+            Must be False. Raises NotImplementedError if True.
+        seed : int, optional
+            Random seed for reproducibility.
+
+        Returns
+        -------
+        np.ndarray
+            Shape (n_paths, n_steps + 1). Rates in percent, guaranteed >= 0.
+        """
+        if antithetic:
+            raise NotImplementedError(
+                "CIRProcess does not support antithetic variates. "
+                "The non-central chi-squared exact simulation has no simple "
+                "symmetric pairing analogous to Gaussian ±Z (λ is path-dependent, "
+                "so antithetic twins diverge immediately). "
+                "Use antithetic=False and increase n_paths instead."
+            )
+        if x0 < 0:
+            raise ValueError(f"Initial rate x0 must be >= 0, got {x0}")
+
+        dt = T / n_steps
+        rng = np.random.default_rng(seed)
+
+        exp_neg_kdt = np.exp(-self._kappa * dt)
+        # Scale factor c = σ²(1 - e^{-κdt}) / (4κ), in percent
+        c = self._sigma ** 2 * (1.0 - exp_neg_kdt) / (4.0 * self._kappa)
+        # Degrees of freedom d = 4κθ / σ² — constant across all steps
+        d = 4.0 * self._kappa * self._theta / (self._sigma ** 2)
+
+        paths = np.empty((n_paths, n_steps + 1))
+        paths[:, 0] = x0
+
+        for i in range(n_steps):
+            # Non-centrality λ = r(t) · e^{-κdt} / c — path-dependent
+            # Clipped to 0 to guard against floating-point negatives near zero
+            lam = np.maximum(paths[:, i] * exp_neg_kdt / c, 0.0)
+            paths[:, i + 1] = c * rng.noncentral_chisquare(df=d, nonc=lam)
+
+        return paths
+
+    def describe(self) -> str:
+        feller_ok = 2.0 * self._kappa * self._theta > self._sigma ** 2
+        return (
+            f"CIR | κ={self._kappa:.4f} | θ={self._theta:.2f}% | "
+            f"σ={self._sigma:.4f}√%/√yr | "
+            f"Feller={'met' if feller_ok else 'violated'}"
         )

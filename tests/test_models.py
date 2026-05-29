@@ -28,7 +28,7 @@ import pandas as pd
 import pytest
 
 from quant_risk.curves.ois import OISCurve
-from quant_risk.models.rates import HullWhiteProcess, VasicekProcess
+from quant_risk.models.rates import CIRProcess, HullWhiteProcess, VasicekProcess
 
 
 # ---------------------------------------------------------------------------
@@ -357,6 +357,79 @@ class TestLocalVolProcess:
 # ---------------------------------------------------------------------------
 # MCSimulator
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# CIRProcess
+# ---------------------------------------------------------------------------
+
+
+class TestCIRProcess:
+    @pytest.fixture
+    def cir(self):
+        # κ=0.3, θ=3.0, σ=0.6: Feller = 2·0.3·3.0 = 1.8 > 0.6² = 0.36 ✓
+        return CIRProcess(kappa=0.3, theta=3.0, sigma=0.6)
+
+    def test_output_shape(self, cir):
+        paths = cir.simulate(x0=2.5, T=1.0, n_steps=252, n_paths=100, seed=0)
+        assert paths.shape == (100, 253)
+
+    def test_initial_condition(self, cir):
+        paths = cir.simulate(x0=2.5, T=1.0, n_steps=252, n_paths=200, seed=0)
+        np.testing.assert_allclose(paths[:, 0], 2.5)
+
+    def test_positivity(self, cir):
+        # Exact chi-squared simulation: rates are structurally non-negative
+        paths = cir.simulate(x0=2.5, T=5.0, n_steps=250, n_paths=500, seed=0)
+        assert (paths >= 0).all()
+
+    def test_seed_reproducibility(self, cir):
+        p1 = cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=7)
+        p2 = cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=7)
+        np.testing.assert_array_equal(p1, p2)
+
+    def test_different_seeds_differ(self, cir):
+        p1 = cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=1)
+        p2 = cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=2)
+        assert not np.array_equal(p1, p2)
+
+    def test_long_run_mean_reversion(self):
+        # E[r(T)] → θ as T → ∞ for large κ (same formula as Vasicek)
+        proc = CIRProcess(kappa=1.0, theta=3.0, sigma=0.5)
+        paths = proc.simulate(x0=0.5, T=20.0, n_steps=1000, n_paths=5000, seed=0)
+        assert abs(paths[:, -1].mean() - 3.0) < 0.05
+
+    def test_antithetic_raises(self, cir):
+        with pytest.raises(NotImplementedError, match="antithetic"):
+            cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=100, antithetic=True)
+
+    def test_negative_x0_raises(self, cir):
+        with pytest.raises(ValueError, match="x0"):
+            cir.simulate(x0=-0.1, T=1.0, n_steps=52, n_paths=100)
+
+    def test_invalid_kappa_raises(self):
+        with pytest.raises(ValueError):
+            CIRProcess(kappa=0.0, theta=2.5, sigma=0.3)
+
+    def test_invalid_sigma_raises(self):
+        with pytest.raises(ValueError):
+            CIRProcess(kappa=0.1, theta=2.5, sigma=0.0)
+
+    def test_feller_violation_warns(self):
+        # κ=0.1, θ=1.0, σ=1.0: 2·0.1·1.0 = 0.2 ≤ 1.0² = 1.0
+        with pytest.warns(UserWarning, match="Feller"):
+            CIRProcess(kappa=0.1, theta=1.0, sigma=1.0)
+
+    def test_describe_contains_name(self, cir):
+        assert "CIR" in cir.describe()
+
+    def test_describe_feller_met(self, cir):
+        assert "met" in cir.describe()
+
+    def test_describe_feller_violated(self):
+        with pytest.warns(UserWarning):
+            proc = CIRProcess(kappa=0.1, theta=1.0, sigma=1.0)
+        assert "violated" in proc.describe()
+
 
 from quant_risk.models.simulator import MCSimulator
 
