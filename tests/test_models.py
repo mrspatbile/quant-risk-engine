@@ -352,3 +352,164 @@ class TestLocalVolProcess:
 
     def test_describe_contains_name(self, flat_lv):
         assert "LocalVol" in flat_lv.describe()
+
+
+# ---------------------------------------------------------------------------
+# MCSimulator
+# ---------------------------------------------------------------------------
+
+from quant_risk.models.simulator import MCSimulator
+
+
+class TestMCSimulator:
+    @pytest.fixture
+    def sim(self, vasicek):
+        return MCSimulator(
+            process=vasicek,
+            x0=2.5,
+            T=5.0,
+            n_steps=60,
+            n_paths=1000,
+            antithetic=True,
+            seed=42,
+        )
+
+    # -- construction / properties ------------------------------------------
+
+    def test_paths_shape(self, sim):
+        assert sim.paths.shape == (1000, 61)
+
+    def test_dt(self, sim):
+        assert sim.dt == pytest.approx(5.0 / 60)
+
+    def test_T_property(self, sim):
+        assert sim.T == 5.0
+
+    def test_n_paths_property(self, sim):
+        assert sim.n_paths == 1000
+
+    def test_n_steps_property(self, sim):
+        assert sim.n_steps == 60
+
+    # -- sdf ----------------------------------------------------------------
+
+    def test_sdf_shape(self, sim):
+        assert sim.sdf(1.0).shape == (1000,)
+
+    def test_sdf_positive(self, sim):
+        # D(0,t) = exp(-∫r ds) > 0 for all paths
+        assert (sim.sdf(2.5) > 0).all()
+
+    def test_sdf_deterministic(self):
+        # Near-zero sigma collapses variance: D(0,T) ≈ exp(-r/100 * T)
+        r, T = 3.0, 2.0
+        proc = VasicekProcess(kappa=1.0, theta=r, sigma=0.001)
+        sim = MCSimulator(proc, x0=r, T=T, n_steps=200, n_paths=500, seed=0)
+        expected = np.exp(-r / 100 * T)
+        np.testing.assert_allclose(sim.sdf(T).mean(), expected, rtol=0.01)
+
+    # -- sdf_between --------------------------------------------------------
+
+    def test_sdf_between_shape(self, sim):
+        assert sim.sdf_between(1.0, 3.0).shape == (1000,)
+
+    def test_sdf_between_multiplicative(self, sim):
+        # D(0,T) = D(0,t1) * D(t1,T) — exact equality via cumulative integral
+        t1, T = 2.0, 5.0
+        np.testing.assert_allclose(
+            sim.sdf(t1) * sim.sdf_between(t1, T),
+            sim.sdf(T),
+            rtol=1e-10,
+        )
+
+    # -- price --------------------------------------------------------------
+
+    def test_price_zero_payoff(self, sim):
+        assert sim.price(lambda paths: np.zeros(paths.shape[0])) == 0.0
+
+    def test_price_zcb_approximation(self):
+        # E^Q[D(0,T) * 1] = P(0,T) ≈ exp(-r/100 * T) under flat r
+        r, T = 2.5, 3.0
+        proc = VasicekProcess(kappa=1.0, theta=r, sigma=0.001)
+        sim = MCSimulator(proc, x0=r, T=T, n_steps=180, n_paths=500, seed=0)
+        price = sim.price(lambda paths: np.ones(paths.shape[0]))
+        np.testing.assert_allclose(price, np.exp(-r / 100 * T), rtol=0.01)
+
+    # -- exposure_profile ---------------------------------------------------
+
+    def test_exposure_profile_keys(self, sim):
+        dates = np.array([1.0, 2.0, 3.0])
+        result = sim.exposure_profile(
+            lambda paths, t: np.zeros(paths.shape[0]), dates
+        )
+        assert set(result.keys()) == {"dates", "mtm", "EE", "NEE", "PFE", "EE_disc", "EPE"}
+
+    def test_exposure_profile_shapes(self, sim):
+        dates = np.array([1.0, 2.0, 3.0])
+        result = sim.exposure_profile(
+            lambda paths, t: np.zeros(paths.shape[0]), dates
+        )
+        assert result["mtm"].shape     == (1000, 3)
+        assert result["EE"].shape      == (3,)
+        assert result["NEE"].shape     == (3,)
+        assert result["PFE"].shape     == (3,)
+        assert result["EE_disc"].shape == (3,)
+        assert isinstance(result["EPE"], float)
+
+    def test_exposure_profile_ee_nonnegative(self, sim):
+        # EE(t) = E[max(V(t),0)] ≥ 0 by definition
+        dates = np.arange(1.0, 6.0, 1.0)
+        result = sim.exposure_profile(
+            lambda paths, t: paths[:, -1] - 2.5, dates
+        )
+        assert (result["EE"] >= 0).all()
+
+    def test_exposure_profile_nee_nonpositive(self, sim):
+        # NEE(t) = E[min(V(t),0)] ≤ 0 by definition
+        dates = np.arange(1.0, 6.0, 1.0)
+        result = sim.exposure_profile(
+            lambda paths, t: paths[:, -1] - 2.5, dates
+        )
+        assert (result["NEE"] <= 0).all()
+
+    def test_exposure_profile_zero_mtm(self, sim):
+        dates = np.array([1.0, 2.0, 3.0])
+        result = sim.exposure_profile(
+            lambda paths, t: np.zeros(paths.shape[0]), dates
+        )
+        np.testing.assert_array_equal(result["EE"], 0.0)
+        np.testing.assert_array_equal(result["NEE"], 0.0)
+        assert result["EPE"] == 0.0
+
+    def test_exposure_profile_positive_mtm(self, sim):
+        # Always-positive MTM: EE = const, NEE = 0
+        dates = np.array([1.0, 2.0])
+        const_val = 5.0
+        result = sim.exposure_profile(
+            lambda paths, t: np.full(paths.shape[0], const_val), dates
+        )
+        np.testing.assert_allclose(result["EE"], const_val)
+        np.testing.assert_allclose(result["NEE"], 0.0)
+
+    def test_exposure_profile_ee_disc_lt_ee(self, sim):
+        # EE_disc = E[D(0,t) * max(V,0)] < EE when positive rates → D(0,t) < 1
+        dates = np.array([2.0, 4.0])
+        result = sim.exposure_profile(
+            lambda paths, t: np.ones(paths.shape[0]), dates
+        )
+        assert (result["EE_disc"] < result["EE"]).all()
+
+    def test_exposure_profile_epe_is_ee_mean(self, sim):
+        # EPE is defined as the time-average of EE
+        dates = np.array([1.0, 2.0, 3.0])
+        result = sim.exposure_profile(
+            lambda paths, t: np.ones(paths.shape[0]), dates
+        )
+        assert result["EPE"] == pytest.approx(result["EE"].mean())
+
+    # -- describe -----------------------------------------------------------
+
+    def test_describe(self, sim):
+        desc = sim.describe()
+        assert "MCSimulator" in desc
+        assert "Vasicek" in desc
