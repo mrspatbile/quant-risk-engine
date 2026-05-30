@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 from quant_risk.data.base import CentralBankClient
+from quant_risk.data.cache_mixin import CacheMixin
 from quant_risk.logging import get_logger
 
 logger = get_logger(__name__)
@@ -22,7 +23,7 @@ FRED_SERIES = {
 }
 
 
-class FedClient(CentralBankClient):
+class FedClient(CacheMixin, CentralBankClient):
     """
     Client for the St. Louis Fed FRED API.
 
@@ -39,17 +40,22 @@ class FedClient(CentralBankClient):
     Currency  : USD
     """
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, cache_dir=None) -> None:
         """
         Parameters
         ----------
         api_key : str
             Free FRED API key from fred.stlouisfed.org
+        cache_dir : Path or str, optional
+            Override the default cache directory (data/cache/fred/).
         """
-        self.api_key = api_key
-        
-        if not self.api_key:
+        if not api_key:
             raise ValueError("FRED API key must be a non-empty string")
+        self.api_key = api_key
+        from pathlib import Path
+        from quant_risk.config import CACHE_DIR
+        self.cache_dir = Path(cache_dir) if cache_dir else CACHE_DIR / "fred"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
 
     @property
@@ -60,8 +66,36 @@ class FedClient(CentralBankClient):
     def currency(self) -> str:
         return "USD"
 
-    def _get_series(self, series_id: str, last_n: int) -> pd.Series:
-        """Fetch a single FRED series."""
+    def _get_series(self, series_id: str, last_n: int,
+                    date: str | None = None) -> pd.Series:
+        """
+        Fetch a single FRED series with local history store.
+
+        On a cache hit (any stored observation on or before date) the API is
+        not called. On a miss, fetches last_n observations up to date from
+        FRED, merges into the local store, and returns the full stored series.
+
+        Parameters
+        ----------
+        series_id : str
+            FRED series identifier (e.g. 'DGS10').
+        last_n : int
+            Observations to fetch on a cache miss.
+        date : str or None
+            Target date as ISO string. If None, always fetches fresh.
+        """
+        cache_name = f"fred_{series_id}"
+
+        # Cache lookup when a specific date is requested
+        if date is not None:
+            cached = self._load_cache(cache_name)
+            if cached is not None:
+                cached.index = pd.to_datetime(cached.index)
+                if not cached.index[cached.index <= pd.Timestamp(date)].empty:
+                    logger.debug("FRED cache hit: %s date=%s", series_id, date)
+                    return cached
+
+        # Cache miss or date=None — fetch fresh from FRED
         params = {
             "series_id": series_id,
             "api_key": self.api_key,
@@ -69,6 +103,9 @@ class FedClient(CentralBankClient):
             "sort_order": "desc",
             "limit": last_n,
         }
+        if date is not None:
+            params["observation_end"] = date
+
         response = requests.get(FRED_BASE, params=params)
         if response.status_code != 200:
             raise ConnectionError(
@@ -81,33 +118,48 @@ class FedClient(CentralBankClient):
             for obs in observations
             if obs["value"] != "."
         }
-        result = pd.Series(records, name=series_id).sort_index()
-        logger.info("FRED %s — %d observations", series_id, len(result))
-        return result
+        fresh = pd.Series(records, name=series_id).sort_index()
+        logger.info("FRED %s — %d observations fetched", series_id, len(fresh))
 
-    def get_overnight_rate(self, last_n: int = 252) -> pd.Series:
+        # Merge into local store and return full series
+        merged = self._merge_cache(cache_name, fresh.to_frame())
+        return merged.iloc[:, 0].rename(series_id)
+
+    def get_overnight_rate(self, last_n: int = 252,
+                           date: str | None = None) -> pd.Series:
         """
         SOFR daily fixings. The USD OIS reference rate.
 
+        Parameters
+        ----------
+        last_n : int
+            Observations to fetch on a cache miss.
+        date : str or None
+            Target date as ISO string. Uses local store if available.
+
         Returns
         -------
-        pd.Series indexed by date string, values in percent.
+        pd.Series indexed by date, values in percent.
         """
-        return self._get_series("SOFR", last_n)
+        return self._get_series("SOFR", last_n, date=date)
 
-    def get_spot_rate(self, maturity: str = "10Y",
-                      last_n: int = 252) -> pd.Series:
+    def get_spot_rate(self, maturity: str = "10Y", last_n: int = 252,
+                      date: str | None = None) -> pd.Series:
         """
         US Treasury constant maturity rate.
 
         Parameters
         ----------
         maturity : str
-            One of 3M, 6M, 1Y, 2Y, 5Y, 10Y, 20Y, 30Y
+            One of 3M, 6M, 1Y, 2Y, 5Y, 10Y, 20Y, 30Y.
+        last_n : int
+            Observations to fetch on a cache miss.
+        date : str or None
+            Target date as ISO string. Uses local store if available.
 
         Returns
         -------
-        pd.Series indexed by date string, values in percent.
+        pd.Series indexed by date, values in percent.
         """
         series_id = FRED_SERIES.get(maturity)
         if series_id is None:
@@ -115,11 +167,19 @@ class FedClient(CentralBankClient):
                 f"Maturity '{maturity}' not available. "
                 f"Choose from {[k for k in FRED_SERIES if k != 'SOFR']}"
             )
-        return self._get_series(series_id, last_n)
+        return self._get_series(series_id, last_n, date=date)
 
-    def get_full_curve(self, last_n: int = 5) -> pd.DataFrame:
+    def get_full_curve(self, last_n: int = 5,
+                       date: str | None = None) -> pd.DataFrame:
         """
         Full US Treasury curve across standard maturities.
+
+        Parameters
+        ----------
+        last_n : int
+            Observations to fetch per series on a cache miss.
+        date : str or None
+            Target date as ISO string. Uses local store if available.
 
         Returns
         -------
@@ -127,10 +187,12 @@ class FedClient(CentralBankClient):
         values in percent.
         """
         maturities = [k for k in FRED_SERIES if k != "SOFR"]
-        series = {m: self.get_spot_rate(m, last_n=last_n) for m in maturities}
+        series = {m: self.get_spot_rate(m, last_n=last_n, date=date)
+                  for m in maturities}
         return pd.DataFrame(series)
-        
-    def get_fx_spot(self, pair: str = "EURUSD", last_n: int = 5) -> pd.Series:
+
+    def get_fx_spot(self, pair: str = "EURUSD", last_n: int = 5,
+                    date: str | None = None) -> pd.Series:
         """
         FX spot rate from FRED.
 
@@ -138,20 +200,22 @@ class FedClient(CentralBankClient):
         ----------
         pair : str
             Currency pair. Supported: 'EURUSD', 'GBPUSD', 'USDJPY',
-            'USDCHF', 'USDBRL'
+            'USDCHF', 'USDBRL'.
         last_n : int
-            Number of observations to fetch.
+            Observations to fetch on a cache miss.
+        date : str or None
+            Target date as ISO string. Uses local store if available.
 
         Returns
         -------
-        pd.Series indexed by date string, values as FX rate.
+        pd.Series indexed by date, values as FX rate.
         """
         fx_series = {
-            "EURUSD": "DEXUSEU",   # USD per EUR
-            "GBPUSD": "DEXUSUK",   # USD per GBP
-            "USDJPY": "DEXJPUS",   # JPY per USD
-            "USDCHF": "DEXSZUS",   # CHF per USD
-            "USDBRL": "DEXBZUS",   # BRL per USD
+            "EURUSD": "DEXUSEU",
+            "GBPUSD": "DEXUSUK",
+            "USDJPY": "DEXJPUS",
+            "USDCHF": "DEXSZUS",
+            "USDBRL": "DEXBZUS",
         }
         series_id = fx_series.get(pair.upper())
         if series_id is None:
@@ -159,7 +223,7 @@ class FedClient(CentralBankClient):
                 f"Pair '{pair}' not supported. "
                 f"Choose from {list(fx_series.keys())}"
             )
-        return self._get_series(series_id, last_n)
+        return self._get_series(series_id, last_n, date=date)
     
     def get_series(self, name: str):
         import time

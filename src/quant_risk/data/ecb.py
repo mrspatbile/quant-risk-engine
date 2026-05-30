@@ -24,6 +24,7 @@ import requests
 
 # internal
 from quant_risk.data.base import CentralBankClient
+from quant_risk.data.cache_mixin import CacheMixin
 from quant_risk.logging import get_logger
 
 logger = get_logger(__name__)
@@ -86,14 +87,25 @@ MMSR_OIS_BUCKETS = {
 # client
 # ---------------------------------------------------------------------------
 
-class ECBClient(CentralBankClient):
+class ECBClient(CacheMixin, CentralBankClient):
     """
     ECB Statistical Data Warehouse REST API client.
+
+    Extends CacheMixin to provide a local append-only history store for
+    ECB-published data series. ECB data is immutable once published, so
+    each date row is fetched once and stored permanently. On subsequent
+    requests for the same date, the local store is used without an API call.
 
     Day count : ACT/360
     Overnight : ESTR
     Currency  : EUR
     """
+
+    def __init__(self, cache_dir=None) -> None:
+        from pathlib import Path
+        from quant_risk.config import CACHE_DIR
+        self.cache_dir = Path(cache_dir) if cache_dir else CACHE_DIR / "ecb"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def day_count_convention(self) -> str:
@@ -217,24 +229,49 @@ class ECBClient(CentralBankClient):
             )
         return pd.DataFrame(series)
 
-    def get_nss_parameters(self, last_n: int = 5, 
-                        rating: str = "AAA") -> pd.DataFrame:
+    def get_nss_parameters(self, last_n: int = 5,
+                           rating: str = "AAA",
+                           date: str | None = None) -> pd.DataFrame:
         """
         ECB published Nelson-Siegel-Svensson parameters.
+
+        Implements a local append-only history store: if the requested date is
+        already cached, no API call is made. On a cache miss the ECB API is
+        called with endPeriod=date (fetching last_n observations up to that
+        date), and the result is merged into the local store.
 
         Parameters
         ----------
         last_n : int
-            Number of observations to fetch.
+            Number of observations to fetch from ECB on a cache miss.
+            Default 5 — sufficient to cover weekends and ECB public holidays.
+            Only used when date=None or on a cache miss.
         rating : str
             'AAA' for triple-A rated issuers only (G_N_A),
             'ALL' for all issuers all ratings (G_N_C).
+        date : str or None
+            Target date as ISO string ('YYYY-MM-DD'). If None, fetches the
+            most recent observations (no endPeriod constraint). If given,
+            checks the local store first; fetches from ECB only on a miss.
 
         Returns
         -------
         pd.DataFrame with columns [beta0, beta1, beta2, beta3, tau1, tau2]
         indexed by date.
         """
+        cache_name = f"nss_{rating.lower()}_params"
+
+        # Cache lookup: only when a specific date is requested
+        if date is not None:
+            cached = self._load_cache(cache_name)
+            if cached is not None:
+                cached.index = pd.to_datetime(cached.index)
+                target = pd.Timestamp(date)
+                if not cached.index[cached.index <= target].empty:
+                    logger.debug("nss cache hit for date=%s", date)
+                    return cached
+
+        # Cache miss or date=None — fetch fresh from ECB
         instrument = "G_N_A" if rating == "AAA" else "G_N_C"
         param_codes = {
             "beta0": f"B.U2.EUR.4F.{instrument}.SV_C_YM.BETA0",
@@ -244,15 +281,18 @@ class ECBClient(CentralBankClient):
             "tau1":  f"B.U2.EUR.4F.{instrument}.SV_C_YM.TAU1",
             "tau2":  f"B.U2.EUR.4F.{instrument}.SV_C_YM.TAU2",
         }
+        query_params: dict = {"format": "jsondata", "lastNObservations": last_n}
+        if date is not None:
+            query_params["endPeriod"] = date
+
         series = {}
         for name, code in param_codes.items():
-            data = self._get(
-                dataset="YC",
-                series_key=code,
-                params={"format": "jsondata", "lastNObservations": last_n},
-            )
+            data = self._get(dataset="YC", series_key=code, params=query_params)
             series[name] = self._parse_observations(data)
-        return pd.DataFrame(series)
+        fresh = pd.DataFrame(series)
+
+        # Merge into local store (append, deduplicate, sort)
+        return self._merge_cache(cache_name, fresh)
     
     def get_ois_rates(self, last_n: int = 5) -> pd.DataFrame:
         """

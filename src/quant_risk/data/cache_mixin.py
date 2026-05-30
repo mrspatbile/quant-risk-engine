@@ -47,6 +47,39 @@ class CacheMixin:
             s.to_parquet(path)
         logger.debug("cache write: %s (%d rows)", name, len(s))
 
+    def _merge_cache(self, name: str, new_data: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Series:
+        """
+        Append new rows to the local history store, deduplicate, sort by date.
+
+        Implements the append-only pattern for static historical facts (e.g. ECB
+        NSS parameters): once a row for a given date is stored it is correct
+        forever. New observations are appended, existing dates are overwritten
+        with the fresh value (keep='last'), and the index is always sorted.
+
+        Parameters
+        ----------
+        name : str
+            Cache key (parquet filename without extension).
+        new_data : pd.DataFrame or pd.Series
+            Rows to merge in. Must have a DatetimeIndex or date-parseable index.
+
+        Returns
+        -------
+        pd.DataFrame or pd.Series
+            The full merged, sorted store as returned by _load_cache.
+        """
+        existing = self._load_cache(name)
+        if existing is not None:
+            combined = pd.concat([existing, new_data])
+            combined = combined[~combined.index.duplicated(keep='last')]
+            combined = combined.sort_index()
+        else:
+            combined = new_data.copy() if isinstance(new_data, pd.DataFrame) else new_data.to_frame()
+            combined = combined.sort_index()
+        self._save_cache(name, combined)
+        logger.debug("cache merge: %s now %d rows", name, len(combined))
+        return self._load_cache(name)
+
     def clear_cache(self, names: str | list[str] | None = None) -> None:
         """
         Delete cached parquet files.
