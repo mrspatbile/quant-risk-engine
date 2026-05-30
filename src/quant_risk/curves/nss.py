@@ -162,17 +162,36 @@ class NSSCurve(DiscountCurve):
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_ecb(cls, rating: str = "AAA", last_n: int = 1, date: str = None) -> "NSSCurve":
+    def from_ecb(cls, rating: str = "AAA", last_n: int = 10, date: str = None) -> "NSSCurve":
+        """
+        Fetch NSS parameters from ECB SDW and construct curve.
+
+        Parameters
+        ----------
+        rating : str
+            'AAA' (ECB AAA-rated issuers) or 'ALL' (all issuers). Default 'AAA'.
+        last_n : int
+            Number of most recent parameter sets to fetch from ECB.
+            Default 10 (increased from 1 to provide more date fallback options).
+        date : str or None
+            Target valuation date as ISO string. If None, uses the most recent
+            available date. Falls back to the most recent date <= target if
+            exact match not found. Example: '2026-03-24'.
+
+        Returns
+        -------
+        NSSCurve
+            Curve at the selected date.
+
+        Raises
+        ------
+        ValueError
+            If no data available on or before the target date.
+        """
         from quant_risk.data.ecb import ECBClient
         client = ECBClient()
-        params = client.get_nss_parameters(last_n=last_n, rating=rating)
-        if date is not None:
-            available = params.index[params.index <= date]
-            if available.empty:
-                raise ValueError(f"No NSS data available on or before {date}")
-            row, val_date = params.loc[available[-1]], str(available[-1])
-        else:
-            row, val_date = params.iloc[-1], str(params.index[-1])
+        params = client.get_nss_parameters(last_n=last_n, rating=rating, date=date)
+        row, val_date = cls._select_params_row(params, date)
         return cls(row, valuation_date=val_date)
 
     @classmethod

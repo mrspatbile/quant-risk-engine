@@ -119,17 +119,27 @@ class OISCurve(DiscountCurve):
         if processed_dir is None:
             processed_dir = cls._find_processed_dir()
 
-        files = sorted([
+        # Prefer parquet (written by notebook 02); fall back to legacy CSV.
+        parquet_files = sorted([
+            f for f in os.listdir(processed_dir)
+            if f.startswith("ois_curve_") and f.endswith(".parquet")
+        ])
+        csv_files = sorted([
             f for f in os.listdir(processed_dir)
             if f.startswith("ois_curve_") and f.endswith(".csv")
         ])
-        if not files:
+
+        if parquet_files:
+            path = os.path.join(processed_dir, parquet_files[-1])
+            data = pd.read_parquet(path)
+        elif csv_files:
+            path = os.path.join(processed_dir, csv_files[-1])
+            data = pd.read_csv(path, index_col="maturity")
+        else:
             raise FileNotFoundError(
                 "No OIS curve file found in data/processed/. "
                 "Run notebook 02_bootstrapping_ois.ipynb first."
             )
-        path = os.path.join(processed_dir, files[-1])
-        data = pd.read_csv(path, index_col="maturity")
         return cls(data)
 
     @classmethod
