@@ -10,6 +10,7 @@ depend only on this abstraction, never on concrete implementations.
 
 from abc import ABC, abstractmethod
 import numpy as np
+import pandas as pd
 
 
 class DiscountCurve(ABC):
@@ -24,6 +25,60 @@ class DiscountCurve(ABC):
     OISCurve   -- bootstrapped from ESTR OIS market instruments via QuantLib
     NSSCurve   -- parametric Nelson-Siegel-Svensson fit to government bonds
     """
+
+    @staticmethod
+    def _select_params_row(
+        params: pd.DataFrame | pd.Series,
+        date: str | pd.Timestamp | None = None,
+    ) -> tuple:
+        """
+        Select a row from a time-series of parameters, with date fallback.
+
+        Normalises the index to datetime, optionally falls back to the most
+        recent date <= target date, and returns the row with its valuation
+        date as an ISO string.
+
+        Parameters
+        ----------
+        params : pd.DataFrame or pd.Series
+            Time series of parameters, indexed by date (string or Timestamp).
+        date : str, pd.Timestamp, or None
+            Target date. If None, returns the last row. If a string, parsed
+            as ISO 8601. If Timestamp, used directly.
+
+        Returns
+        -------
+        tuple
+            (row, val_date_str) where row is the selected Series and
+            val_date_str is the date as YYYY-MM-DD.
+
+        Raises
+        ------
+        ValueError
+            If no data is available on or before the target date.
+        """
+        # Normalise index to datetime
+        params.index = pd.to_datetime(params.index)
+
+        # Convert date to Timestamp if provided
+        if date is None:
+            # Return last row
+            row = params.iloc[-1]
+            val_date = params.index[-1]
+        else:
+            target = pd.Timestamp(date)
+            available = params.index[params.index <= target]
+            if available.empty:
+                raise ValueError(
+                    f"No data available on or before {date}. "
+                    f"Earliest available: {params.index[0].date()}"
+                )
+            row = params.loc[available[-1]]
+            val_date = available[-1]
+
+        # Return row and date as ISO string
+        val_date_str = val_date.strftime("%Y-%m-%d")
+        return row, val_date_str
 
     @property
     @abstractmethod

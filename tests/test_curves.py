@@ -7,6 +7,8 @@ Run with: pytest tests/test_curves.py -v
 
 import pytest
 import numpy as np
+import pandas as pd
+from quant_risk.curves.base import DiscountCurve
 from quant_risk.curves.ois import OISCurve
 from quant_risk.curves.nss import NSSCurve
 
@@ -151,3 +153,66 @@ class TestNSSCurve:
     def test_from_ecb_with_date(self):
         nss = NSSCurve.from_ecb(rating='AAA', last_n=60, date='2026-03-24')
         assert nss.valuation_date <= '2026-03-24'
+
+
+# ------------------------------------------------------------------
+# DiscountCurve._select_params_row tests
+# ------------------------------------------------------------------
+
+class TestSelectParamsRow:
+
+    @pytest.fixture
+    def sample_params(self):
+        """Time series of sample parameters indexed by date."""
+        dates = pd.date_range("2026-03-20", periods=5, freq="D")
+        data = pd.DataFrame(
+            {"value": [1.0, 2.0, 3.0, 4.0, 5.0]},
+            index=dates
+        )
+        return data
+
+    def test_select_last_row_when_date_none(self, sample_params):
+        row, val_date = DiscountCurve._select_params_row(sample_params, date=None)
+        assert val_date == "2026-03-24"
+        assert row["value"] == 5.0
+
+    def test_select_exact_date_match(self, sample_params):
+        row, val_date = DiscountCurve._select_params_row(sample_params, date="2026-03-22")
+        assert val_date == "2026-03-22"
+        assert row["value"] == 3.0
+
+    def test_fallback_to_prior_date(self, sample_params):
+        # Request 2026-03-23 12:00 (between 2026-03-23 00:00 and 2026-03-24 00:00)
+        # Should fall back to 2026-03-23 00:00
+        row, val_date = DiscountCurve._select_params_row(sample_params, date="2026-03-23 12:00:00")
+        assert val_date == "2026-03-23"
+        assert row["value"] == 4.0
+
+    def test_timestamp_input(self, sample_params):
+        ts = pd.Timestamp("2026-03-21")
+        row, val_date = DiscountCurve._select_params_row(sample_params, date=ts)
+        assert val_date == "2026-03-21"
+        assert row["value"] == 2.0
+
+    def test_no_data_before_target_raises_error(self, sample_params):
+        with pytest.raises(ValueError, match="No data available"):
+            DiscountCurve._select_params_row(sample_params, date="2026-03-19")
+
+    def test_normalises_string_dates_in_index(self):
+        # Index as strings, not Timestamps
+        data = pd.DataFrame(
+            {"value": [1.0, 2.0]},
+            index=["2026-03-21", "2026-03-22"]
+        )
+        row, val_date = DiscountCurve._select_params_row(data, date="2026-03-22")
+        assert val_date == "2026-03-22"
+        assert row["value"] == 2.0
+
+    def test_returns_iso_string_format(self, sample_params):
+        _, val_date = DiscountCurve._select_params_row(sample_params, date=None)
+        # Should be YYYY-MM-DD
+        parts = val_date.split("-")
+        assert len(parts) == 3
+        assert len(parts[0]) == 4  # year
+        assert len(parts[1]) == 2  # month
+        assert len(parts[2]) == 2  # day
