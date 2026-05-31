@@ -8,9 +8,11 @@ Run with: pytest tests/test_curves.py -v
 import pytest
 import numpy as np
 import pandas as pd
+import QuantLib as ql
 from quant_risk.curves.base import DiscountCurve
 from quant_risk.curves.ois import OISCurve
 from quant_risk.curves.nss import NSSCurve
+from quant_risk.curves.array_curve import ArrayCurve, curve_from_arrays
 
 
 # ------------------------------------------------------------------
@@ -216,3 +218,133 @@ class TestSelectParamsRow:
         assert len(parts[0]) == 4  # year
         assert len(parts[1]) == 2  # month
         assert len(parts[2]) == 2  # day
+
+
+# ------------------------------------------------------------------
+# ArrayCurve / curve_from_arrays tests
+# ------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def set_ql_date():
+    """Fix QuantLib evaluation date for all ArrayCurve tests."""
+    ql.Settings.instance().evaluationDate = ql.Date(31, 5, 2026)
+    yield
+
+
+FLAT_RATE   = 0.025    # 2.5% in decimal
+MATURITIES  = np.array([1.0, 2.0, 5.0, 10.0])
+FLAT_RATES  = np.full(4, FLAT_RATE)
+
+
+class TestArrayCurveConstruction:
+
+    def test_is_discount_curve_subclass(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES)
+        assert isinstance(c, DiscountCurve)
+
+    def test_curve_from_arrays_returns_array_curve(self):
+        c = curve_from_arrays(MATURITIES, FLAT_RATES)
+        assert isinstance(c, ArrayCurve)
+
+    def test_ql_curve_property_is_yield_term_structure(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES)
+        assert isinstance(c.ql_curve, ql.YieldTermStructure)
+
+    def test_valuation_date_format(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES)
+        parts = c.valuation_date.split("-")
+        assert len(parts) == 3 and len(parts[0]) == 4
+
+    def test_valuation_date_override(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES, valuation_date="2026-03-24")
+        assert c.valuation_date == "2026-03-24"
+
+    def test_describe_contains_class_name(self):
+        assert "ArrayCurve" in ArrayCurve(MATURITIES, FLAT_RATES).describe()
+
+
+class TestArrayCurveLogLinear:
+
+    def test_discount_matches_exp_formula(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES, interpolation="log_linear")
+        for T in [1.0, 2.0, 5.0, 10.0]:
+            expected = np.exp(-FLAT_RATE * T)
+            np.testing.assert_allclose(c.discount(T), expected, atol=1e-8)
+
+    def test_zero_rate_returns_percent(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES, interpolation="log_linear")
+        for T in [1.0, 5.0, 10.0]:
+            np.testing.assert_allclose(c.zero_rate(T), FLAT_RATE * 100, atol=1e-4)
+
+    def test_forward_rate_consistent_with_discount(self):
+        mats  = np.array([1.0, 2.0, 5.0, 10.0])
+        rates = np.array([0.020, 0.022, 0.025, 0.028])
+        c = ArrayCurve(mats, rates)
+        T1, T2 = 2.0, 5.0
+        df1, df2 = c.discount(T1), c.discount(T2)
+        fwd_implied = -np.log(df2 / df1) / (T2 - T1) * 100
+        np.testing.assert_allclose(c.forward_rate(T1, T2), fwd_implied, atol=1e-5)
+
+    def test_log_linear_non_negative_forward_rates(self):
+        # Normal upward-sloping curve — forward rates must be non-negative
+        mats  = np.array([0.25, 0.5, 1.0, 2.0, 5.0, 10.0])
+        rates = np.array([0.018, 0.020, 0.022, 0.024, 0.027, 0.030])
+        c = ArrayCurve(mats, rates, interpolation="log_linear")
+        T_grid = np.linspace(0.5, 9.5, 50)
+        fwds = [c.forward_rate(t, t + 0.5) for t in T_grid]
+        assert all(f >= 0 for f in fwds), f"Negative forward rate found: {min(fwds):.4f}"
+
+
+class TestArrayCurveInterpolations:
+
+    def test_linear_interpolation(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES, interpolation="linear")
+        np.testing.assert_allclose(c.discount(5.0), np.exp(-FLAT_RATE * 5), atol=1e-6)
+
+    def test_cubic_interpolation(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES, interpolation="cubic")
+        np.testing.assert_allclose(c.discount(5.0), np.exp(-FLAT_RATE * 5), atol=1e-4)
+
+    def test_all_interpolations_produce_discount_curve(self):
+        for interp in ["log_linear", "linear", "cubic"]:
+            c = ArrayCurve(MATURITIES, FLAT_RATES, interpolation=interp)
+            assert isinstance(c, DiscountCurve)
+
+
+class TestArrayCurveSingleVertex:
+
+    def test_single_vertex_flat_curve(self):
+        c = ArrayCurve(np.array([5.0]), np.array([FLAT_RATE]))
+        np.testing.assert_allclose(c.discount(5.0), np.exp(-FLAT_RATE * 5), atol=1e-8)
+
+    def test_single_vertex_extrapolation(self):
+        c = ArrayCurve(np.array([5.0]), np.array([FLAT_RATE]))
+        # Flat extrapolation beyond the single vertex
+        np.testing.assert_allclose(c.discount(10.0), np.exp(-FLAT_RATE * 10), atol=1e-4)
+
+
+class TestArrayCurveValidation:
+
+    def test_non_monotone_maturities_raises(self):
+        with pytest.raises(ValueError, match="strictly increasing"):
+            ArrayCurve(np.array([1.0, 3.0, 2.0, 5.0]), FLAT_RATES)
+
+    def test_equal_maturities_raises(self):
+        with pytest.raises(ValueError, match="strictly increasing"):
+            ArrayCurve(np.array([1.0, 1.0, 5.0, 10.0]), FLAT_RATES)
+
+    def test_length_mismatch_raises(self):
+        with pytest.raises(ValueError, match="same length"):
+            ArrayCurve(np.array([1.0, 2.0]), np.array([0.02]))
+
+    def test_empty_maturities_raises(self):
+        with pytest.raises(ValueError, match="at least one"):
+            ArrayCurve(np.array([]), np.array([]))
+
+    def test_invalid_interpolation_raises(self):
+        with pytest.raises(ValueError, match="interpolation"):
+            ArrayCurve(MATURITIES, FLAT_RATES, interpolation="spline")
+
+    def test_error_message_shows_bad_index(self):
+        with pytest.raises(ValueError, match="index 1"):
+            ArrayCurve(np.array([1.0, 3.0, 2.0, 5.0]), FLAT_RATES)
