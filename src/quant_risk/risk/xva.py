@@ -26,7 +26,7 @@ and cached for the lifetime of the engine. All CVA/DVA/FVA/MVA methods share
 the cached profile.
 """
 
-from __future__ import annotations
+
 
 from dataclasses import dataclass
 from typing import Optional

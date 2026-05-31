@@ -22,8 +22,6 @@ QuantLib internals. This differs from the rest of the library where rates
 are in percent at public boundaries. The docstring documents this explicitly.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import QuantLib as ql
 
