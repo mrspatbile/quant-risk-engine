@@ -8,9 +8,8 @@ Implements the post-2008 multi-curve framework:
 - EURIBOR curve    -- floating rate projection
 
 Regulatory use:
-- FRTB SA (CRR3 Article 325) -- delta GIRR sensitivity per tenor vertex
-- IRRBB (EBA/RTS/2022/09)    -- EVE and NII sensitivity
-- EMIR                        -- OIS discounting mandatory for cleared swaps
+- IRRBB (EBA/RTS/2022/09) -- EVE and NII sensitivity
+- EMIR                     -- OIS discounting mandatory for cleared swaps
 - IFRS 9                      -- Level 2 fair value
 """
 

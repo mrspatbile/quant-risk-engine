@@ -173,7 +173,8 @@ class TestIRSwap:
         assert receiver.dv01(curve) > 0
 
     def test_key_rate_dv01_5y_dominates(self, swap, curve):
-        kr = swap.key_rate_dv01(curve)
+        tenors = [0.0, 1/12, 2/12, 3/12, 6/12, 9/12, 1, 2, 3, 5, 10, 15]
+        kr = swap.key_rate_dv01(curve, tenors=tenors)
         assert abs(kr["5Y"]) == max(abs(v) for v in kr.values())
 
 
@@ -889,7 +890,7 @@ class TestEvalDateIsolation:
             issue_date="2023-01-01", maturity_date="2028-01-01",
         )
         prev = ql.Settings.instance().evaluationDate
-        bond.key_rate_dv01(curve)
+        bond.key_rate_dv01(curve, tenors=[1, 2, 5, 10])
         assert ql.Settings.instance().evaluationDate == prev
 
     def test_eval_date_restored_after_swap_price(self, curve):

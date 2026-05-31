@@ -35,19 +35,6 @@ from quant_risk.curves.base import DiscountCurve
 from quant_risk.instruments.base import Instrument
 
 
-# ── FRTB CSR-NS prescribed tenor vertices ────────────────────────────────────
-FRTB_CSR_TENORS = {
-    '0.5Y': 0.5,
-    '1Y':   1.0,
-    '2Y':   2.0,
-    '3Y':   3.0,
-    '5Y':   5.0,
-    '10Y':  10.0,
-}
-
-# FRTB CSR-NS risk weights -- IG corporate bucket 3 (EUR)
-FRTB_RW_IG = {t: 0.005 for t in FRTB_CSR_TENORS}   # 0.5% all tenors
-
 # ISDA standard coupons
 STANDARD_COUPON_IG = 0.0100   # 100bps
 STANDARD_COUPON_HY = 0.0500   # 500bps
@@ -365,43 +352,32 @@ class CreditDefaultSwap(Instrument):
     def key_rate_dv01(
         self,
         curve: DiscountCurve,
-        tenors: list = None,
+        tenors: list,
         bump: float = 0.0001,
     ) -> dict:
         """
-        CS01 per FRTB CSR-NS tenor vertex.
+        CS01 at caller-specified tenor vertices.
 
-        Bumps the credit spread curve in parallel by 1bp and measures
-        the NPV change -- the dominant risk for CDS positions.
+        Bumps the credit spread curve in parallel by 1bp and measures the
+        NPV change. The caller supplies the vertex list.
 
-        FRTB CSR-NS prescribed vertices: 0.5Y, 1Y, 2Y, 3Y, 5Y, 10Y.
+        Parameters
+        ----------
+        tenors : list
+            Vertex maturities in years, e.g. [0.5, 1, 2, 3, 5, 10].
 
-        Note: this method bumps the full hazard curve by 1bp equivalent
+        Note: bumps the full hazard curve by 1bp equivalent
         (bump / (1-R) in hazard rate space) -- a parallel CS01.
         For vertex-by-vertex bucketed CS01 a term structure bump is needed.
         """
         disc_handle = self._disc_handle_from_curve(curve)
-        npv_base    = self._reprice(disc_handle).NPV()
 
         # parallel 1bp hazard bump
         hazard_bump  = bump / (1 - self._recovery)
-        bumped_hazard = ql.ZeroSpreadedTermStructure(
-            ql.YieldTermStructureHandle(
-                ql.FlatForward(
-                    self._valuation_date,
-                    self._hazard_handle.currentLink().hazardRate(
-                        self._maturity
-                    ) + hazard_bump,
-                    ql.Actual365Fixed()
-                )
-            ),
-            ql.QuoteHandle(ql.SimpleQuote(0.0))
-        )
 
         result = {}
-        vertices = tenors or list(FRTB_CSR_TENORS.keys())
-        for label in vertices:
-            t   = FRTB_CSR_TENORS.get(label, float(label.replace('Y','')))
+        for t in tenors:
+            label = f"{int(t*12)}M" if t < 1 else f"{int(t)}Y"
             mat = _imm_maturity(self._valuation_date, t)
             cds_up = self._build_cds_with_hazard(
                 self._hazard_handle, disc_handle, maturity=mat

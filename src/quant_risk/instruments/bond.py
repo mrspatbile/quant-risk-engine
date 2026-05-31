@@ -179,18 +179,18 @@ class Bond(Instrument):
     def key_rate_dv01(
         self,
         curve  : DiscountCurve,
-        tenors : list = None,
+        tenors : list,
         bump   : float = 0.0001,
     ) -> dict:
         """
-        Key rate DV01 per tenor bucket -- FRTB SA delta GIRR sensitivity.
+        Key rate DV01 at caller-specified tenor vertices.
 
         Parameters
         ----------
         curve : DiscountCurve
             Baseline OIS curve.
-        tenors : list, optional
-            Tenor buckets in years. Defaults to FRTB SA vertices.
+        tenors : list
+            Vertex maturities in years, e.g. [0.25, 0.5, 1, 2, 5, 10].
         bump : float
             Rate bump in decimal. Default 0.0001 (1bp).
 
@@ -198,9 +198,6 @@ class Bond(Instrument):
         -------
         dict {tenor_label: dv01_eur}
         """
-        if tenors is None:
-            tenors = self._FRTB_VERTICES
-
         val_date = self._valuation_date(curve)
 
         def _impl():

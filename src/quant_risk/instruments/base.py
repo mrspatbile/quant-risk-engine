@@ -35,10 +35,6 @@ class Instrument(ABC):
     VanillaOption -- European option via Black-Scholes-Merton
     """
     
-    _FRTB_VERTICES: list = [0.25, 0.5, 1, 2, 3, 5, 10, 15, 20, 30]
-    _FRTB_VERTEX_LABELS: list = ['0.25Y','0.5Y','1Y','2Y','3Y','5Y','10Y','15Y','20Y','30Y']
-
-
     @property
     @abstractmethod
     def currency(self) -> str:
@@ -127,27 +123,28 @@ class Instrument(ABC):
     def key_rate_dv01(
         self,
         curve: DiscountCurve,
-        tenors: list = None,
+        tenors: list,
         bump: float = 0.0001,
     ) -> dict:
         """
-        DV01 per tenor bucket -- FRTB SA delta risk sensitivity.
+        DV01 per tenor vertex.
 
-        Bumps each pillar rate by 1bp independently and revalues.
-        The sum of key rate DV01s approximates the total DV01 subject
-        to interpolation overlap between adjacent buckets.
+        Bumps each pillar rate by `bump` independently and revalues.
+        The sum approximates the total DV01 subject to interpolation
+        overlap between adjacent vertices.
 
-        FRTB SA prescribed vertices (CRR3 Article 325):
-        0.25Y, 0.5Y, 1Y, 2Y, 3Y, 5Y, 10Y, 15Y, 20Y, 30Y
+        The caller supplies the vertex list — this library has no opinion
+        on which tenors regulators prescribe. Pass regulatory vertices
+        (FRTB GIRR, CSR-NS, etc.) from the application layer.
 
         Parameters
         ----------
         curve : DiscountCurve
             Baseline discount curve.
-        tenors : list, optional
-            Tenor buckets in years. Defaults to FRTB SA vertices.
+        tenors : list
+            Vertex maturities in years, e.g. [0.25, 0.5, 1, 2, 5, 10].
         bump : float
-            Size of the rate bump in decimal. Default 0.0001 (1bp).
+            Rate bump in decimal. Default 0.0001 (1bp).
 
         Returns
         -------
@@ -194,43 +191,6 @@ class Instrument(ABC):
         """
         return ql.YieldTermStructureHandle(curve._ql_curve)
 
-    def _nearest_frtb_vertex(
-        self, sensitivity: float, maturity: float, vertices: list = None
-    ) -> dict:
-        """
-        Assign a scalar sensitivity to the nearest FRTB tenor vertex.
-
-        Used by single-maturity instruments (FXForward, VanillaOption) where
-        all IR or FX sensitivity concentrates at one tenor bucket.
-        CRR3 Article 325 prescribed vertices: 0.25Y to 30Y.
-
-        Parameters
-        ----------
-        sensitivity : float
-            Total sensitivity in currency units.
-        maturity : float
-            Instrument maturity in years.
-        vertices : list, optional
-            Tenor labels e.g. ['0.25Y', '1Y', ...]. Defaults to FRTB labels.
-
-        Returns
-        -------
-        dict
-            {tenor_label: sensitivity} with zero at all non-nearest vertices.
-        """
-        frtb_labels = [
-            f"{int(v*12)}M" if v < 1 else f"{int(v)}Y"
-            for v in self._FRTB_VERTICES
-        ]
-        labels = vertices or self._FRTB_VERTEX_LABELS
-        result = {}
-        for label in labels:
-            t = float(label.replace('Y', ''))
-            result[label] = sensitivity if abs(t - maturity) == min(
-                abs(float(v.replace('Y', '')) - maturity) for v in labels
-            ) else 0.0
-        return result
-    
     @staticmethod
     def _parse_date(date_str: str) -> ql.Date:
         """Parse ISO date string 'YYYY-MM-DD' to QuantLib Date."""

@@ -251,19 +251,26 @@ class FXForward(Instrument):
     def key_rate_dv01(
         self,
         curve: DiscountCurve,
-        tenors: list = None,
+        tenors: list,
         bump: float = 0.0001,
     ) -> dict:
         """
-        Delta IR per FRTB GIRR tenor vertex.
+        IR sensitivity assigned to the nearest of the caller-supplied vertices.
 
         FX forward IR sensitivity concentrates at the maturity tenor.
-        All key rate DV01s are zero except at the maturity bucket.
-        """
-        vertices      = tenors or self._FRTB_VERTEX_LABELS
-        ir_dv01       = self.dv01(curve, bump)
+        All key rate DV01s are zero except at the nearest bucket.
 
-        return self._nearest_frtb_vertex(ir_dv01, self._T, vertices)
+        Parameters
+        ----------
+        tenors : list
+            Vertex maturities in years, e.g. [0.25, 0.5, 1, 2, 5, 10].
+        """
+        ir_dv01     = self.dv01(curve, bump)
+        nearest_idx = min(range(len(tenors)), key=lambda i: abs(tenors[i] - self._T))
+        return {
+            (f"{int(t*12)}M" if t < 1 else f"{int(t)}Y"): (ir_dv01 if i == nearest_idx else 0.0)
+            for i, t in enumerate(tenors)
+        }
 
 
     # ── FXForward-specific methods ────────────────────────────────────────────

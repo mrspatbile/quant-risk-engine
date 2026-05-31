@@ -180,16 +180,26 @@ class VanillaOption(Instrument):
     def key_rate_dv01(
         self,
         curve: DiscountCurve,
-        tenors: list = None,
+        tenors: list,
         bump: float = 0.0001,
     ) -> dict:
         """
-        Rho per FRTB GIRR tenor vertex.
-        Concentrates at the expiry tenor.
+        Rho assigned to the nearest of the caller-supplied vertices.
+
+        Option IR sensitivity concentrates at the expiry tenor.
+        All key rate DV01s are zero except at the nearest bucket.
+
+        Parameters
+        ----------
+        tenors : list
+            Vertex maturities in years, e.g. [0.25, 0.5, 1, 2, 5, 10].
         """
-        vertices      = tenors or self._FRTB_VERTEX_LABELS
-        rho_total     = self.dv01(curve, bump)
-        return self._nearest_frtb_vertex(rho_total, self._T, vertices)
+        rho_total   = self.dv01(curve, bump)
+        nearest_idx = min(range(len(tenors)), key=lambda i: abs(tenors[i] - self._T))
+        return {
+            (f"{int(t*12)}M" if t < 1 else f"{int(t)}Y"): (rho_total if i == nearest_idx else 0.0)
+            for i, t in enumerate(tenors)
+        }
 
 
     # ── option-specific methods ───────────────────────────────────────────────
