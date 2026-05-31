@@ -160,14 +160,14 @@ class ECBClient(CacheMixin, CentralBankClient):
 
         Returns
         -------
-        pd.Series indexed by date string, values in percent.
+        pd.Series indexed by date string, values decimal (e.g. 0.025 for 2.5%).
         """
         data = self._get(
             dataset="EST",
             series_key="B.EU000A2X2A25.WT",
             params={"format": "jsondata", "lastNObservations": last_n},
         )
-        return self._parse_observations(data)
+        return self._parse_observations(data) / 100
 
     def get_spot_rate(self, maturity: str = "10Y",
                       last_n: int = 252,
@@ -187,7 +187,7 @@ class ECBClient(CacheMixin, CentralBankClient):
 
         Returns
         -------
-        pd.Series indexed by date string, values in percent.
+        pd.Series indexed by date string, values decimal (e.g. 0.025 for 2.5%).
         """
         if maturity not in GOV_MATURITIES:
             raise ValueError(
@@ -200,7 +200,7 @@ class ECBClient(CacheMixin, CentralBankClient):
             series_key=f"B.U2.EUR.4F.{instrument}.SV_C_YM.{GOV_MATURITIES[maturity].code}",
             params={"format": "jsondata", "lastNObservations": last_n},
         )
-        return self._parse_observations(data)
+        return self._parse_observations(data) / 100
 
     def get_full_curve(self, last_n: int = 5,
                        rating: str = "AAA") -> pd.DataFrame:
@@ -220,7 +220,7 @@ class ECBClient(CacheMixin, CentralBankClient):
         -------
         pd.DataFrame
             Indexed by date, columns are maturity labels (3M..30Y),
-            values in percent.
+            values decimal (e.g. 0.025 for 2.5%).
         """
         series = {}
         for maturity in GOV_MATURITIES:
@@ -310,7 +310,7 @@ class ECBClient(CacheMixin, CentralBankClient):
         -------
         pd.DataFrame
             Indexed by date, columns are tenor labels (1M..10Y),
-            values in percent.
+            values decimal (e.g. 0.025 for 2.5%).
         """
         series = {}
         for tenor, bucket in MMSR_OIS_BUCKETS.items():
@@ -326,7 +326,7 @@ class ECBClient(CacheMixin, CentralBankClient):
                         "lastNObservations": last_n,
                     },
                 )
-                series[tenor] = self._parse_observations(data)
+                series[tenor] = self._parse_observations(data) / 100
             except ConnectionError:
                 series[tenor] = pd.Series(dtype=float)
 

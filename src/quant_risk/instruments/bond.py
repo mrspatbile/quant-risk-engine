@@ -36,7 +36,7 @@ class Bond(Instrument):
     face_value : float
         Notional in currency units. Example: 1_000_000
     coupon_rate : float
-        Annual coupon rate in percent. Example: 2.60
+        Annual coupon rate, decimal. Example: 0.0260 for 2.60%.
     issue_date : str
         Issue date as ISO string. Example: '2023-08-15'
     maturity_date : str
@@ -56,7 +56,7 @@ class Bond(Instrument):
     >>> bond  = Bond(
     ...     isin          = 'DE0001102580',
     ...     face_value    = 1_000_000,
-    ...     coupon_rate   = 2.60,
+    ...     coupon_rate   = 0.0260,
     ...     issue_date    = '2023-08-15',
     ...     maturity_date = '2034-08-15',
     ... )
@@ -121,9 +121,9 @@ class Bond(Instrument):
             accrued     = self._ql_bond.accruedAmount()
             ytm         = self._ql_bond.bondYield(
                 self._day_count, ql.Compounded, ql.Annual
-            ) * 100
+            )
             ir          = ql.InterestRate(
-                ytm / 100, self._day_count, ql.Compounded, ql.Annual
+                ytm, self._day_count, ql.Compounded, ql.Annual
             )
             duration    = ql.BondFunctions.duration(
                 self._ql_bond, ir, ql.Duration.Modified
@@ -266,7 +266,7 @@ class Bond(Instrument):
     def describe(self) -> str:
         return (
             f"Bond | {self._isin} | "
-            f"coupon={self._coupon_rate}% | "
+            f"coupon={self._coupon_rate:.2%} | "
             f"maturity={self._maturity_date} | "
             f"currency={self._currency} | "
             f"notional={self._face_value:,.0f}"
@@ -291,7 +291,7 @@ class Bond(Instrument):
             self._settlement_days,
             self._face_value,
             schedule,
-            [self._coupon_rate / 100.0],
+            [self._coupon_rate],
             self._day_count,
         )
 
@@ -311,8 +311,8 @@ class Bond(Instrument):
             for t in tenors
         ]
         rates  = [
-            curve.zero_rate(1/365) / 100 if t == 0
-            else curve.zero_rate(t) / 100
+            curve.zero_rate(1/365) if t == 0
+            else curve.zero_rate(t)
             for t in tenors
         ]
         return dates, rates

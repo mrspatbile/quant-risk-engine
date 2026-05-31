@@ -69,34 +69,47 @@ class OISCurve(DiscountCurve):
         return self._ql_curve.discount(dt)
 
     def zero_rate(self, T: float) -> float:
+        """
+        Continuously compounded zero rate at T.
+
+        Returns
+        -------
+        float
+            Zero rate, decimal (e.g. 0.025 for 2.5%).
+        """
         dt = self._settlement() + ql.Period(int(T * 365), ql.Days)
-        return self._ql_curve.zeroRate(
-            dt, self._day_count, ql.Continuous
-        ).rate() * 100
+        return self._ql_curve.zeroRate(dt, self._day_count, ql.Continuous).rate()
 
     def forward_rate(self, T1: float, T2: float) -> float:
+        """
+        Continuously compounded forward rate for [T1, T2].
+
+        Returns
+        -------
+        float
+            Forward rate, decimal (e.g. 0.025 for 2.5%).
+        """
         dt1 = self._settlement() + ql.Period(int(T1 * 365), ql.Days)
         dt2 = self._settlement() + ql.Period(int(T2 * 365), ql.Days)
-        return self._ql_curve.forwardRate(
-            dt1, dt2, self._day_count, ql.Continuous
-        ).rate() * 100
+        return self._ql_curve.forwardRate(dt1, dt2, self._day_count, ql.Continuous).rate()
 
     def instantaneous_forward(self, T: float) -> float:
         """
         Instantaneous forward rate at T via finite differences.
-        f(0,T) = -d/dT ln P(0,T)
-        Required for Hull-White calibration in Module 2.
+        f(0,T) = -d/dT ln P(0,T). Required for Hull-White calibration.
+
+        Returns
+        -------
+        float
+            Instantaneous forward rate, decimal (e.g. 0.025 for 2.5%).
         """
-        dT = 1/365  # one day step
+        dT = 1 / 365
         settlement = self._settlement()
-        
         dt1 = settlement + ql.Period(max(int((T - dT) * 365), 1), ql.Days)
         dt2 = settlement + ql.Period(int((T + dT) * 365), ql.Days)
-        
-        p1 = self._ql_curve.discount(dt1)
-        p2 = self._ql_curve.discount(dt2)
-        
-        return -(np.log(p2) - np.log(p1)) / (2 * dT) * 100
+        p1  = self._ql_curve.discount(dt1)
+        p2  = self._ql_curve.discount(dt2)
+        return -(np.log(p2) - np.log(p1)) / (2 * dT)
 
     # ------------------------------------------------------------------
     # class methods -- alternative constructors
@@ -191,7 +204,7 @@ class OISCurve(DiscountCurve):
             if label not in MMSR_OIS_BUCKETS:
                 continue
             bucket  = MMSR_OIS_BUCKETS[label]
-            rate    = ois_data.loc[label, "zero_rate_pct"] / 100
+            rate    = ois_data.loc[label, "zero_rate_pct"]   # already decimal
             tenor   = ql.Period(int(bucket.maturity * 12), ql.Months)
             quote   = ql.QuoteHandle(ql.SimpleQuote(rate))
 

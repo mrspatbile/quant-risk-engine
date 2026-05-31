@@ -122,7 +122,7 @@ class DiscountCurve(ABC):
         Returns
         -------
         float
-            Zero rate in percent.
+            Zero rate, decimal (e.g. 0.025 for 2.5%).
         """
         pass
 
@@ -144,7 +144,7 @@ class DiscountCurve(ABC):
         Returns
         -------
         float
-            Forward rate in percent.
+            Forward rate, decimal (e.g. 0.025 for 2.5%).
         """
         pass
 
@@ -166,7 +166,7 @@ class DiscountCurve(ABC):
         Returns
         -------
         float
-            Instantaneous forward rate in percent.
+            Instantaneous forward rate, decimal (e.g. 0.025 for 2.5%).
         """
         pass
 
@@ -201,7 +201,7 @@ class DiscountCurve(ABC):
         Returns
         -------
         np.ndarray
-            Array of zero rates in percent.
+            Array of zero rates, decimal (e.g. 0.025 for 2.5%).
         """
         return np.array([self.zero_rate(T) for T in maturities])
 

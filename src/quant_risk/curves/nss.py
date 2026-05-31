@@ -74,7 +74,7 @@ class NSSCurve(DiscountCurve):
 
     def zero_rate(self, T: float) -> float:
         """
-        NSS zero rate at maturity T in years, in percent.
+        NSS zero rate at maturity T in years.
 
         Parameters
         ----------
@@ -84,17 +84,18 @@ class NSSCurve(DiscountCurve):
         Returns
         -------
         float
-            Zero rate in percent.
+            Zero rate, decimal (e.g. 0.025 for 2.5%).
         """
         T = max(T, 1e-6)
         f1 = (1 - np.exp(-T / self._tau1)) / (T / self._tau1)
         f2 = f1 - np.exp(-T / self._tau1)
         f3 = (1 - np.exp(-T / self._tau2)) / (T / self._tau2) - np.exp(-T / self._tau2)
-        return self._beta0 + self._beta1 * f1 + self._beta2 * f2 + self._beta3 * f3
+        # ECB publishes beta parameters in percent; divide by 100 at output boundary
+        return (self._beta0 + self._beta1 * f1 + self._beta2 * f2 + self._beta3 * f3) / 100
 
     def discount(self, T: float) -> float:
         """
-        Discount factor P(0,T) = exp(-r(T) * T / 100).
+        Discount factor P(0,T) = exp(-r(T) * T).
 
         Parameters
         ----------
@@ -107,29 +108,39 @@ class NSSCurve(DiscountCurve):
             Discount factor in (0, 1].
         """
         T = max(T, 1e-6)
-        return np.exp(-self.zero_rate(T) / 100 * T)
+        return np.exp(-self.zero_rate(T) * T)
 
     def forward_rate(self, T1: float, T2: float) -> float:
         """
-        Continuously compounded forward rate for [T1, T2] in percent.
+        Continuously compounded forward rate for [T1, T2].
         Derived analytically from NSS discount factors.
+
+        Returns
+        -------
+        float
+            Forward rate, decimal (e.g. 0.025 for 2.5%).
         """
         T1 = max(T1, 1e-6)
         T2 = max(T2, T1 + 1e-6)
         p1 = self.discount(T1)
         p2 = self.discount(T2)
-        return -(np.log(p2) - np.log(p1)) / (T2 - T1) * 100
+        return -(np.log(p2) - np.log(p1)) / (T2 - T1)
 
     def instantaneous_forward(self, T: float) -> float:
         """
         Instantaneous forward rate at T via finite differences.
         f(0,T) = -d/dT ln P(0,T)
         Required for Hull-White calibration in Module 2.
+
+        Returns
+        -------
+        float
+            Instantaneous forward rate, decimal (e.g. 0.025 for 2.5%).
         """
         dT = 1e-4
         p1 = self.discount(max(T - dT, 1e-6))
         p2 = self.discount(T + dT)
-        return -(np.log(p2) - np.log(p1)) / (2 * dT) * 100
+        return -(np.log(p2) - np.log(p1)) / (2 * dT)
 
     # ------------------------------------------------------------------
     # NSS-specific methods
@@ -149,13 +160,13 @@ class NSSCurve(DiscountCurve):
 
     @property
     def short_rate(self) -> float:
-        """Instantaneous short rate = beta0 + beta1."""
-        return self._beta0 + self._beta1
+        """Instantaneous short rate, decimal. β₀ + β₁ converted from ECB percent."""
+        return (self._beta0 + self._beta1) / 100
 
     @property
     def long_rate(self) -> float:
-        """Long run level = beta0 (asymptote as T → ∞)."""
-        return self._beta0
+        """Long-run level, decimal. β₀ (asymptote as T → ∞) converted from ECB percent."""
+        return self._beta0 / 100
 
     # ------------------------------------------------------------------
     # alternative constructors

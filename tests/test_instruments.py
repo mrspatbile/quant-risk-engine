@@ -14,7 +14,7 @@ def bund():
     return Bond(
         isin          = "DE0001102580",
         face_value    = 1_000_000,
-        coupon_rate   = 2.60,
+        coupon_rate   = 0.0260,
         issue_date    = "2023-08-15",
         maturity_date = "2034-08-15",
     )
@@ -83,17 +83,17 @@ class TestBond:
 class TestBondValidation:
     def test_negative_face_value_raises(self):
         with pytest.raises(ValueError, match="face_value"):
-            Bond(isin="X", face_value=-1, coupon_rate=2.0,
+            Bond(isin="X", face_value=-1, coupon_rate=0.02,
                  issue_date="2023-01-01", maturity_date="2028-01-01")
 
     def test_zero_face_value_raises(self):
         with pytest.raises(ValueError):
-            Bond(isin="X", face_value=0, coupon_rate=2.0,
+            Bond(isin="X", face_value=0, coupon_rate=0.02,
                  issue_date="2023-01-01", maturity_date="2028-01-01")
 
     def test_negative_coupon_raises(self):
         with pytest.raises(ValueError, match="coupon_rate"):
-            Bond(isin="X", face_value=1_000_000, coupon_rate=-1.0,
+            Bond(isin="X", face_value=1_000_000, coupon_rate=-0.01,
                  issue_date="2023-01-01", maturity_date="2028-01-01")
 
     def test_zero_coupon_is_valid(self):
@@ -102,7 +102,7 @@ class TestBondValidation:
 
     def test_maturity_before_issue_raises(self):
         with pytest.raises(ValueError, match="maturity_date"):
-            Bond(isin="X", face_value=1_000_000, coupon_rate=2.0,
+            Bond(isin="X", face_value=1_000_000, coupon_rate=0.02,
                  issue_date="2028-01-01", maturity_date="2023-01-01")
 
 
@@ -118,7 +118,7 @@ def swap():
     return IRSwap(
         notional       = 10_000_000,
         maturity_years = 5,
-        fixed_rate     = 2.50,
+        fixed_rate     = 0.0250,
         valuation_date = "2026-03-24",
     )
 
@@ -166,7 +166,7 @@ class TestIRSwap:
         receiver = IRSwap(
             notional       = 10_000_000,
             maturity_years = 5,
-            fixed_rate     = 2.50,
+            fixed_rate     = 0.0250,
             valuation_date = "2026-03-24",
             pay_fixed      = False,
         )
@@ -180,17 +180,17 @@ class TestIRSwap:
 class TestIRSwapValidation:
     def test_zero_notional_raises(self):
         with pytest.raises(ValueError, match="notional"):
-            IRSwap(notional=0, maturity_years=5, fixed_rate=2.5,
+            IRSwap(notional=0, maturity_years=5, fixed_rate=0.025,
                    valuation_date="2026-03-24")
 
     def test_zero_maturity_raises(self):
         with pytest.raises(ValueError, match="maturity_years"):
-            IRSwap(notional=1_000_000, maturity_years=0, fixed_rate=2.5,
+            IRSwap(notional=1_000_000, maturity_years=0, fixed_rate=0.025,
                    valuation_date="2026-03-24")
 
     def test_negative_fixed_rate_raises(self):
         with pytest.raises(ValueError, match="fixed_rate"):
-            IRSwap(notional=1_000_000, maturity_years=5, fixed_rate=-1.0,
+            IRSwap(notional=1_000_000, maturity_years=5, fixed_rate=-0.01,
                    valuation_date="2026-03-24")
 
 # ------------------------------------------------------------------
@@ -848,7 +848,7 @@ def _make_ois_curve(val_date_str: str) -> OISCurve:
     data = pd.DataFrame(
         {
             "years":           [1/12, 3/12, 6/12, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0],
-            "zero_rate_pct":   [2.63, 2.58, 2.48, 2.30, 2.20, 2.15, 2.20, 2.40, 2.50],
+            "zero_rate_pct":   [0.0263, 0.0258, 0.0248, 0.0230, 0.0220, 0.0215, 0.0220, 0.0240, 0.0250],
             "discount_factor": [0.998, 0.994, 0.988, 0.977, 0.957, 0.937, 0.895, 0.786, 0.690],
             "valuation_date":  [val_date_str] * 9,
         },
@@ -867,7 +867,7 @@ class TestEvalDateIsolation:
 
     def test_eval_date_restored_after_bond_price(self, curve):
         bond = Bond(
-            isin="ISO001", face_value=1_000_000, coupon_rate=2.5,
+            isin="ISO001", face_value=1_000_000, coupon_rate=0.025,
             issue_date="2023-01-01", maturity_date="2028-01-01",
         )
         prev = ql.Settings.instance().evaluationDate
@@ -876,7 +876,7 @@ class TestEvalDateIsolation:
 
     def test_eval_date_restored_after_bond_dv01(self, curve):
         bond = Bond(
-            isin="ISO002", face_value=1_000_000, coupon_rate=2.5,
+            isin="ISO002", face_value=1_000_000, coupon_rate=0.025,
             issue_date="2023-01-01", maturity_date="2028-01-01",
         )
         prev = ql.Settings.instance().evaluationDate
@@ -885,7 +885,7 @@ class TestEvalDateIsolation:
 
     def test_eval_date_restored_after_bond_key_rate_dv01(self, curve):
         bond = Bond(
-            isin="ISO003", face_value=1_000_000, coupon_rate=2.5,
+            isin="ISO003", face_value=1_000_000, coupon_rate=0.025,
             issue_date="2023-01-01", maturity_date="2028-01-01",
         )
         prev = ql.Settings.instance().evaluationDate
@@ -895,7 +895,7 @@ class TestEvalDateIsolation:
     def test_eval_date_restored_after_swap_price(self, curve):
         swap = IRSwap(
             notional=5_000_000, maturity_years=5,
-            fixed_rate=2.5, valuation_date="2026-03-24",
+            fixed_rate=0.025, valuation_date="2026-03-24",
         )
         prev = ql.Settings.instance().evaluationDate
         swap.price(curve)
@@ -904,7 +904,7 @@ class TestEvalDateIsolation:
     def test_eval_date_restored_after_swap_dv01(self, curve):
         swap = IRSwap(
             notional=5_000_000, maturity_years=5,
-            fixed_rate=2.5, valuation_date="2026-03-24",
+            fixed_rate=0.025, valuation_date="2026-03-24",
         )
         prev = ql.Settings.instance().evaluationDate
         swap.dv01(curve)
@@ -920,7 +920,7 @@ class TestEvalDateIsolation:
         curve_b = _make_ois_curve("2026-07-01")
 
         bond_a = Bond(
-            isin="BONDA", face_value=1_000_000, coupon_rate=2.5,
+            isin="BONDA", face_value=1_000_000, coupon_rate=0.025,
             issue_date="2023-01-01", maturity_date="2028-01-01",
         )
         bond_b = Bond(

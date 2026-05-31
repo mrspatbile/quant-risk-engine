@@ -115,40 +115,45 @@ class ArrayCurve(DiscountCurve):
 
     def zero_rate(self, T: float) -> float:
         """
-        Continuously compounded zero rate at T in years, returned in percent.
+        Continuously compounded zero rate at T in years.
+
+        Returns
+        -------
+        float
+            Zero rate, decimal (e.g. 0.025 for 2.5%).
         """
         T = max(T, 1e-6)
         dt = self._ref_date + ql.Period(max(int(round(T * 365)), 1), ql.Days)
-        return (
-            self._ql_curve
-            .zeroRate(dt, self._day_count, ql.Continuous)
-            .rate()
-            * 100
-        )
+        return self._ql_curve.zeroRate(dt, self._day_count, ql.Continuous).rate()
 
     def forward_rate(self, T1: float, T2: float) -> float:
         """
-        Continuously compounded forward rate for [T1, T2] in percent.
+        Continuously compounded forward rate for [T1, T2].
+
+        Returns
+        -------
+        float
+            Forward rate, decimal (e.g. 0.025 for 2.5%).
         """
         T1 = max(T1, 1e-6)
         T2 = max(T2, T1 + 1e-6)
         dt1 = self._ref_date + ql.Period(max(int(round(T1 * 365)), 1), ql.Days)
         dt2 = self._ref_date + ql.Period(max(int(round(T2 * 365)), 1), ql.Days)
-        return (
-            self._ql_curve
-            .forwardRate(dt1, dt2, self._day_count, ql.Continuous)
-            .rate()
-            * 100
-        )
+        return self._ql_curve.forwardRate(dt1, dt2, self._day_count, ql.Continuous).rate()
 
     def instantaneous_forward(self, T: float) -> float:
         """
-        Instantaneous forward rate at T via central finite differences, in percent.
+        Instantaneous forward rate at T via central finite differences.
+
+        Returns
+        -------
+        float
+            Instantaneous forward rate, decimal (e.g. 0.025 for 2.5%).
         """
         dT = 1e-4
         p1 = self.discount(max(T - dT, 1e-6))
         p2 = self.discount(T + dT)
-        return -(np.log(p2) - np.log(p1)) / (2 * dT) * 100
+        return -(np.log(p2) - np.log(p1)) / (2 * dT)
 
     # ── Raw QuantLib access ───────────────────────────────────────────────
 

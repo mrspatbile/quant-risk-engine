@@ -139,9 +139,9 @@ class FedClient(CacheMixin, CentralBankClient):
 
         Returns
         -------
-        pd.Series indexed by date, values in percent.
+        pd.Series indexed by date, values decimal (e.g. 0.025 for 2.5%).
         """
-        return self._get_series("SOFR", last_n, date=date)
+        return self._get_series("SOFR", last_n, date=date) / 100
 
     def get_spot_rate(self, maturity: str = "10Y", last_n: int = 252,
                       date: str | None = None) -> pd.Series:
@@ -159,7 +159,7 @@ class FedClient(CacheMixin, CentralBankClient):
 
         Returns
         -------
-        pd.Series indexed by date, values in percent.
+        pd.Series indexed by date, values decimal (e.g. 0.025 for 2.5%).
         """
         series_id = FRED_SERIES.get(maturity)
         if series_id is None:
@@ -167,7 +167,7 @@ class FedClient(CacheMixin, CentralBankClient):
                 f"Maturity '{maturity}' not available. "
                 f"Choose from {[k for k in FRED_SERIES if k != 'SOFR']}"
             )
-        return self._get_series(series_id, last_n, date=date)
+        return self._get_series(series_id, last_n, date=date) / 100
 
     def get_full_curve(self, last_n: int = 5,
                        date: str | None = None) -> pd.DataFrame:
@@ -184,7 +184,7 @@ class FedClient(CacheMixin, CentralBankClient):
         Returns
         -------
         pd.DataFrame indexed by date, columns are maturity labels,
-        values in percent.
+        values decimal (e.g. 0.025 for 2.5%).
         """
         maturities = [k for k in FRED_SERIES if k != "SOFR"]
         series = {m: self.get_spot_rate(m, last_n=last_n, date=date)

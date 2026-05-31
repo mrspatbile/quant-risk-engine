@@ -18,8 +18,8 @@ LocalVolProcess
 
 Rate convention
 ---------------
-All rates, yields, and volatilities are in percent throughout.
-r = 2.5 means 2.5%/year. σ = 20.0 means 20%/year. Divided by 100 before use
+All rates, yields, and volatilities are in decimal throughout.
+r = 0.025 means 2.5%/year. σ = 0.20 means 20%/year.
 in exponential arguments — consistent with the project-wide convention.
 """
 
@@ -58,11 +58,11 @@ class GBMProcess(StochasticProcess):
     Parameters
     ----------
     r : float
-        Risk-free rate in percent per year (e.g. 2.5 for 2.5%).
+        Risk-free rate, decimal (e.g. 0.025 for 2.5%).
     sigma : float
-        Volatility in percent per year (e.g. 20.0 for 20%).
+        Volatility, decimal (e.g. 0.20 for 20%).
     q : float, optional
-        Continuous dividend yield in percent per year. Default 0.0.
+        Continuous dividend yield, decimal. Default 0.0.
     """
 
     def __init__(self, r: float, sigma: float, q: float = 0.0) -> None:
@@ -78,17 +78,17 @@ class GBMProcess(StochasticProcess):
 
     @property
     def r(self) -> float:
-        """Risk-free rate in percent."""
+        """Risk-free rate, decimal."""
         return self._r
 
     @property
     def sigma(self) -> float:
-        """Volatility in percent."""
+        """Volatility, decimal."""
         return self._sigma
 
     @property
     def q(self) -> float:
-        """Dividend yield in percent."""
+        """Dividend yield, decimal."""
         return self._q
 
     def simulate(
@@ -129,10 +129,10 @@ class GBMProcess(StochasticProcess):
         Z = self._draw_normals(n_paths, n_steps, antithetic, seed)
 
         # Pre-compute time-invariant exact simulation constants
-        # log-return drift per step: (r-q)/100 × dt - σ²/20000 × dt
-        drift_step = ((self._r - self._q) / 100 - (self._sigma / 100) ** 2 / 2) * dt
+        # log-return drift per step: (r-q) × dt - σ²/2 × dt
+        drift_step = ((self._r - self._q) - self._sigma ** 2 / 2) * dt
         # log-return std per step
-        vol_step   = (self._sigma / 100) * np.sqrt(dt)
+        vol_step   = self._sigma * np.sqrt(dt)
 
         # Simulate in log-space for numerical stability, then exponentiate
         log_S = np.empty((n_paths, n_steps + 1))
@@ -146,7 +146,7 @@ class GBMProcess(StochasticProcess):
 
     def describe(self) -> str:
         return (
-            f"GBM | r={self._r:.2f}% | σ={self._sigma:.2f}% | q={self._q:.2f}%"
+            f"GBM | r={self._r:.2%} | σ={self._sigma:.2%} | q={self._q:.2%}"
         )
 
 
@@ -246,13 +246,13 @@ class LocalVolProcess(StochasticProcess):
         for i in range(n_steps):
             t = i * dt
             # Evaluate local vol at each path's current price and time
-            # local_vol_fn(S, t) returns percent; divide by 100 for calculation
+            # local_vol_fn(S, t) returns decimal
             sigma_loc = np.array([
-                self._local_vol_fn(s, t) / 100 for s in S_curr
+                self._local_vol_fn(s, t) for s in S_curr
             ])
 
             # Log-Euler step
-            drift     = (self._r / 100 - self._q / 100 - sigma_loc ** 2 / 2) * dt
+            drift     = (self._r - self._q - sigma_loc ** 2 / 2) * dt
             diffusion = sigma_loc * sqrt_dt * Z[:, i]
             log_S[:, i + 1] = log_S[:, i] + drift + diffusion
 
@@ -262,4 +262,4 @@ class LocalVolProcess(StochasticProcess):
         return np.exp(log_S)
 
     def describe(self) -> str:
-        return f"LocalVol | r={self._r:.2f}% | σ(S,t) user-defined"
+        return f"LocalVol | r={self._r:.2%} | σ(S,t) user-defined"

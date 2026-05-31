@@ -37,7 +37,7 @@ class IRSwap(Instrument):
     maturity_years : int
         Swap tenor in years. Example: 5
     fixed_rate : float
-        Contractual fixed rate in percent. Example: 2.50
+        Contractual fixed rate, decimal. Example: 0.0250 for 2.50%.
     valuation_date : str
         ISO date string. Example: '2026-03-24'
     pay_fixed : bool
@@ -58,7 +58,7 @@ class IRSwap(Instrument):
     >>> swap  = IRSwap(
     ...     notional       = 10_000_000,
     ...     maturity_years = 5,
-    ...     fixed_rate     = 2.50,
+    ...     fixed_rate     = 0.0250,
     ...     valuation_date = '2026-03-24',
     ... )
     >>> swap.par_rate(curve)
@@ -85,7 +85,7 @@ class IRSwap(Instrument):
     ):
         self._notional           = notional
         self._maturity_years     = maturity_years
-        self._fixed_rate         = fixed_rate / 100
+        self._fixed_rate         = fixed_rate
         self._valuation_date_str = valuation_date
         self._pay_fixed          = pay_fixed
         self._currency           = currency
@@ -118,15 +118,15 @@ class IRSwap(Instrument):
         def _impl():
             swap, _, _ = self._build_swap(curve)
             npv           = swap.NPV()
-            par_rate      = swap.fairRate() * 100
+            par_rate      = swap.fairRate()
             fixed_leg_npv = swap.fixedLegNPV()
             float_leg_npv = swap.floatingLegNPV()
             return {
                 "npv"           : round(npv, 2),
                 "fixed_leg_npv" : round(fixed_leg_npv, 2),
                 "float_leg_npv" : round(float_leg_npv, 2),
-                "par_rate"      : round(par_rate, 4),
-                "fixed_rate"    : round(self._fixed_rate * 100, 4),
+                "par_rate"      : round(par_rate, 6),
+                "fixed_rate"    : round(self._fixed_rate, 6),
             }
 
         return self._with_eval_date(self._ql_valuation_date, _impl)
@@ -143,10 +143,10 @@ class IRSwap(Instrument):
         Returns
         -------
         float
-            Par rate in percent.
+            Par rate, decimal (e.g. 0.025 for 2.5%).
         """
         swap, _, _ = self._build_swap(curve)
-        return round(swap.fairRate() * 100, 4)
+        return round(swap.fairRate(), 6)
 
     def dv01(self, curve: DiscountCurve, bump: float = 0.0001) -> float:
         """
@@ -237,7 +237,7 @@ class IRSwap(Instrument):
         direction = "Payer" if self._pay_fixed else "Receiver"
         return (
             f"IRSwap | {direction} | "
-            f"fixed={self._fixed_rate*100:.4f}% | "
+            f"fixed={self._fixed_rate:.4%} | "
             f"maturity={self._maturity_years}Y | "
             f"currency={self._currency} | "
             f"notional={self._notional:,.0f}"
@@ -257,8 +257,8 @@ class IRSwap(Instrument):
             for t in tenors
         ]
         ois_rates = [
-            curve.zero_rate(1/365) / 100 if t == 0
-            else curve.zero_rate(t) / 100
+            curve.zero_rate(1/365) if t == 0
+            else curve.zero_rate(t)
             for t in tenors
         ]
         euribor_rates = [r + self._euribor_spread for r in ois_rates]
@@ -393,6 +393,6 @@ class IRSwap(Instrument):
         if self._maturity_years <= 0:
             raise ValueError(f"maturity_years must be positive, got {self._maturity_years}")
         if self._fixed_rate < 0:
-            raise ValueError(f"fixed_rate must be >= 0, got {self._fixed_rate * 100}")
+            raise ValueError(f"fixed_rate must be >= 0, got {self._fixed_rate}")
 
     

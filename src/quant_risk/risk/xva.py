@@ -12,8 +12,7 @@ Computes CVA, DVA, FVA, and MVA using:
 Rate convention
 ---------------
 All rates (K, sigma) and the initial short rate passed to MCSimulator are in
-percent throughout, consistent with the project-wide convention. The /100
-conversion to decimal is applied inside _hw_bond_price().
+decimal throughout, consistent with the project-wide convention.
 
 Design
 ------
@@ -51,7 +50,7 @@ class Trade:
         Day-count fractions for each payment period (same length as
         payment_dates), e.g. np.ones(5) for annual 30/360.
     K : float
-        Fixed coupon rate in percent (e.g. 2.5 for 2.5%).
+        Fixed coupon rate, decimal (e.g. 0.025 for 2.5%).
     notional : float
         Swap notional in base currency.
     is_payer : bool
@@ -90,8 +89,7 @@ class XVAEngine:
         Hull-White mean reversion speed in 1/year. Used in the bond price
         formula for path-wise IRS repricing.
     sigma : float
-        Hull-White instantaneous volatility in %/sqrt(year). Consistent with
-        the project-wide percent convention.
+        Hull-White instantaneous volatility, decimal/√year (e.g. 0.005 for 0.5%/√year).
     curve : DiscountCurve
         Market term structure (OISCurve). Used for discount factors and
         instantaneous forward rates in the bond price formula.
@@ -156,9 +154,8 @@ class XVAEngine:
         dt_fd   = 1.0 / 12.0
         t_lo    = max(t - dt_fd, dt_fd)
         f_0t    = curve.forward_rate(t_lo, t_lo + dt_fd)
-        sigma_d = sigma / 100.0
-        var_adj = (sigma_d**2 / (4.0 * kappa)) * B_tau**2 * (1.0 - np.exp(-2.0 * kappa * t))
-        rate_dev = (r_t[:, None] - f_0t) / 100.0 * B_tau[None, :]
+        var_adj  = (sigma**2 / (4.0 * kappa)) * B_tau**2 * (1.0 - np.exp(-2.0 * kappa * t))
+        rate_dev = (r_t[:, None] - f_0t) * B_tau[None, :]
         return (P_0T / P_0t)[None, :] * np.exp(-rate_dev - var_adj[None, :])
 
     # ── Private: trade-level MTM and DV01 ──────────────────────────────────
@@ -167,7 +164,7 @@ class XVAEngine:
         """
         IRS MTM at time t along each path.
 
-        V_payer(t)   = N × [(1-P^HW(t,T_n)) - K/100 × Σ δᵢ P^HW(t,Tᵢ)]
+        V_payer(t)   = N × [(1-P^HW(t,T_n)) - K × Σ δᵢ P^HW(t,Tᵢ)]
         V_receiver   = -V_payer
         """
         remaining = trade.payment_dates[trade.payment_dates > t]
@@ -178,7 +175,7 @@ class XVAEngine:
         r_t    = self._sim.paths[:, t_idx]
         P_ti   = self._hw_bond_price(t, remaining, r_t)
         fl     = 1.0 - P_ti[:, -1]
-        fx     = (trade.K / 100.0) * (yf_r * P_ti).sum(axis=1)
+        fx     = trade.K * (yf_r * P_ti).sum(axis=1)
         payer  = trade.notional * (fl - fx)
         return payer if trade.is_payer else -payer
 
@@ -518,6 +515,6 @@ class XVAEngine:
         return (
             f"XVAEngine | {len(self._trades)} trade(s) | "
             f"notional={total_notl:,.0f} | "
-            f"κ={self._kappa:.4f} | σ={self._sigma:.4f}%/√yr | "
+            f"κ={self._kappa:.4f} | σ={self._sigma:.4%}/√yr | "
             f"n_dates={len(self._exp_dates)}"
         )

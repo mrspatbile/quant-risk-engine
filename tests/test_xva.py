@@ -35,15 +35,15 @@ from quant_risk.risk.xva import Trade, XVAEngine
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
-def _synthetic_flat_ois(rate_pct: float = 2.5) -> OISCurve:
-    """Flat OIS curve at rate_pct%, synthetic, no API calls."""
+def _synthetic_flat_ois(rate: float = 0.025) -> OISCurve:
+    """Flat OIS curve at rate (decimal), synthetic, no API calls."""
     tenors  = [1/12, 2/12, 3/12, 6/12, 9/12, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0]
     labels  = ["1M","2M","3M","6M","9M","12M","2Y","3Y","5Y","10Y","10Y+"]
     data = pd.DataFrame(
         {
             "years":           tenors,
-            "zero_rate_pct":   [rate_pct] * len(tenors),
-            "discount_factor": [np.exp(-rate_pct / 100 * t) for t in tenors],
+            "zero_rate_pct":   [rate] * len(tenors),
+            "discount_factor": [np.exp(-rate * t) for t in tenors],
             "valuation_date":  ["2026-03-24"] * len(tenors),
         },
         index=labels,
@@ -53,8 +53,8 @@ def _synthetic_flat_ois(rate_pct: float = 2.5) -> OISCurve:
 
 
 KAPPA = 0.10
-SIGMA = 0.50
-RATE  = 2.5
+SIGMA = 0.005   # 0.5%/√yr in decimal
+RATE  = 0.025   # 2.5% in decimal
 # Small sim — speed over precision in unit tests
 N_PATHS = 200
 N_STEPS = 24   # bi-monthly over 2Y
@@ -112,11 +112,11 @@ class TestTrade:
         tr = Trade(
             payment_dates = np.array([1.0, 2.0]),
             year_fracs    = np.ones(2),
-            K             = 2.5,
+            K             = 0.025,
             notional      = 500_000,
             is_payer      = False,
         )
-        assert tr.K == 2.5
+        assert tr.K == 0.025
         assert tr.notional == 500_000
         assert not tr.is_payer
 
@@ -357,7 +357,7 @@ class TestNetting:
         tr_rec = Trade(pay_dates, yf, RATE, 500_000, False)
 
         exp = np.arange(0.5, 3.5, 0.5)
-        kappa, sigma = 0.10, 0.50
+        kappa, sigma = 0.10, 0.005
 
         eng_pay  = XVAEngine(sim, [tr_pay],         exp, kappa, sigma, flat_ois)
         eng_net  = XVAEngine(sim, [tr_pay, tr_rec],  exp, kappa, sigma, flat_ois)
@@ -378,7 +378,7 @@ class TestNetting:
         tr_rec = Trade(pay_dates_3, yf_3, RATE, 1_000_000, False)
 
         exp   = np.arange(0.5, 3.5, 0.5)
-        kappa, sigma = 0.10, 0.50
+        kappa, sigma = 0.10, 0.005
 
         eng_pay  = XVAEngine(sim, [tr_pay],         exp, kappa, sigma, flat_ois)
         eng_net  = XVAEngine(sim, [tr_pay, tr_rec],  exp, kappa, sigma, flat_ois)

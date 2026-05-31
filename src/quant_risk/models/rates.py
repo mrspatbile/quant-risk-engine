@@ -71,9 +71,9 @@ class VasicekProcess(StochasticProcess):
     kappa : float
         Mean reversion speed in 1/year. Typical range: 0.01 – 1.0.
     theta : float
-        Long-run mean short rate in percent. Typical range: 1.0 – 5.0.
+        Long-run mean short rate, decimal. Example: 0.025 for 2.5%.
     sigma : float
-        Volatility in percent/√year. Typical range: 0.1 – 2.0.
+        Volatility, decimal/√year. Example: 0.005 for 0.5%/√year.
     """
 
     def __init__(self, kappa: float, theta: float, sigma: float) -> None:
@@ -82,8 +82,8 @@ class VasicekProcess(StochasticProcess):
         if sigma <= 0:
             raise ValueError(f"sigma must be positive, got {sigma}")
         self._kappa = kappa
-        self._theta = theta   # percent
-        self._sigma = sigma   # percent / sqrt(year)
+        self._theta = theta
+        self._sigma = sigma
 
     @property
     def name(self) -> str:
@@ -96,12 +96,12 @@ class VasicekProcess(StochasticProcess):
 
     @property
     def theta(self) -> float:
-        """Long-run mean short rate in percent."""
+        """Long-run mean short rate, decimal."""
         return self._theta
 
     @property
     def sigma(self) -> float:
-        """Volatility in percent/√year."""
+        """Volatility, decimal/√year."""
         return self._sigma
 
     def simulate(
@@ -119,7 +119,7 @@ class VasicekProcess(StochasticProcess):
         Parameters
         ----------
         x0 : float
-            Initial short rate in percent.
+            Initial short rate, decimal (e.g. 0.025 for 2.5%).
         T : float
             Time horizon in years.
         n_steps : int
@@ -134,7 +134,7 @@ class VasicekProcess(StochasticProcess):
         Returns
         -------
         np.ndarray
-            Shape (n_paths, n_steps + 1). Rates in percent.
+            Shape (n_paths, n_steps + 1). Rates in decimal.
         """
         dt = T / n_steps
 
@@ -164,8 +164,8 @@ class VasicekProcess(StochasticProcess):
 
     def describe(self) -> str:
         return (
-            f"Vasicek | κ={self._kappa:.4f} | θ={self._theta:.2f}% | "
-            f"σ={self._sigma:.4f}%/√yr"
+            f"Vasicek | κ={self._kappa:.4f} | θ={self._theta:.2%} | "
+            f"σ={self._sigma:.4%}/√yr"
         )
 
 
@@ -304,8 +304,8 @@ class HullWhiteProcess(StochasticProcess):
         Parameters
         ----------
         x0 : float
-            Initial short rate in percent. Should equal f(0,0) for
-            a fully calibrated simulation.
+            Initial short rate, decimal (e.g. 0.025 for 2.5%). Should equal
+            f(0,0) for a fully calibrated simulation.
         T : float
             Time horizon in years.
         n_steps : int
@@ -320,7 +320,7 @@ class HullWhiteProcess(StochasticProcess):
         Returns
         -------
         np.ndarray
-            Shape (n_paths, n_steps + 1). Rates in percent.
+            Shape (n_paths, n_steps + 1). Rates in decimal.
         """
         dt = T / n_steps
         sqrt_dt = np.sqrt(dt)
@@ -346,7 +346,7 @@ class HullWhiteProcess(StochasticProcess):
     def describe(self) -> str:
         return (
             f"Hull-White | κ={self._kappa:.4f} | "
-            f"σ={self._sigma:.4f}%/√yr | "
+            f"σ={self._sigma:.4%}/√yr | "
             f"curve={self._curve.valuation_date}"
         )
 
@@ -390,19 +390,19 @@ class CIRProcess(StochasticProcess):
 
     Rate convention
     ---------------
-    x0 and θ in percent (e.g. 2.5 means 2.5%).
-    σ in √percent/√year — different units from Vasicek. At the long-run mean,
-    the instantaneous vol is σ√θ %/√year. For σ = 0.32 and θ = 2.5%,
-    this equals 0.32·√2.5 ≈ 0.51 %/√year, comparable to a Vasicek σ of 0.51.
+    x0 and θ in decimal (e.g. 0.025 for 2.5%).
+    σ in √decimal/√year — different units from Vasicek. At the long-run mean,
+    the instantaneous vol is σ√θ decimal/√year. For σ = 0.032 and θ = 0.025,
+    this equals 0.032·√0.025 ≈ 0.00506 decimal/√year ≈ 0.506%/√year.
 
     Parameters
     ----------
     kappa : float
         Mean reversion speed in 1/year. Must be positive.
     theta : float
-        Long-run mean short rate in percent.
+        Long-run mean short rate, decimal. Example: 0.025 for 2.5%.
     sigma : float
-        Volatility coefficient in √percent/√year. Must be positive.
+        Volatility coefficient, √decimal/√year. Must be positive.
     """
 
     def __init__(self, kappa: float, theta: float, sigma: float) -> None:
@@ -433,12 +433,12 @@ class CIRProcess(StochasticProcess):
 
     @property
     def theta(self) -> float:
-        """Long-run mean short rate in percent."""
+        """Long-run mean short rate, decimal."""
         return self._theta
 
     @property
     def sigma(self) -> float:
-        """Volatility coefficient in √percent/√year."""
+        """Volatility coefficient, √decimal/√year."""
         return self._sigma
 
     def simulate(
@@ -456,7 +456,7 @@ class CIRProcess(StochasticProcess):
         Parameters
         ----------
         x0 : float
-            Initial short rate in percent. Must be >= 0.
+            Initial short rate, decimal (e.g. 0.025 for 2.5%). Must be >= 0.
         T : float
             Time horizon in years.
         n_steps : int
@@ -471,7 +471,7 @@ class CIRProcess(StochasticProcess):
         Returns
         -------
         np.ndarray
-            Shape (n_paths, n_steps + 1). Rates in percent, guaranteed >= 0.
+            Shape (n_paths, n_steps + 1). Rates in decimal, guaranteed >= 0.
         """
         if antithetic:
             raise NotImplementedError(
@@ -507,7 +507,7 @@ class CIRProcess(StochasticProcess):
     def describe(self) -> str:
         feller_ok = 2.0 * self._kappa * self._theta > self._sigma ** 2
         return (
-            f"CIR | κ={self._kappa:.4f} | θ={self._theta:.2f}% | "
-            f"σ={self._sigma:.4f}√%/√yr | "
+            f"CIR | κ={self._kappa:.4f} | θ={self._theta:.2%} | "
+            f"σ={self._sigma:.4%}√/√yr | "
             f"Feller={'met' if feller_ok else 'violated'}"
         )

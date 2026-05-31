@@ -52,12 +52,12 @@ class TestOISCurve:
             assert ois_curve.zero_rate(T) > 0
 
     def test_forward_rate_consistent_with_discount(self, ois_curve):
-        # P(0,T2) = P(0,T1) * exp(-f(T1,T2) * (T2-T1) / 100)
+        # P(0,T2) = P(0,T1) * exp(-f(T1,T2) * (T2-T1))  — rates are decimal
         T1, T2 = 2.0, 5.0
         df1 = ois_curve.discount(T1)
         df2 = ois_curve.discount(T2)
         fwd = ois_curve.forward_rate(T1, T2)
-        df2_implied = df1 * np.exp(-fwd / 100 * (T2 - T1))
+        df2_implied = df1 * np.exp(-fwd * (T2 - T1))
         assert abs(df2 - df2_implied) < 1e-3
 
     def test_instantaneous_forward_positive(self, ois_curve):
@@ -109,15 +109,15 @@ class TestNSSCurve:
         assert nss_curve.valuation_date == "2026-03-24"
 
     def test_short_rate(self, nss_curve, nss_params):
-        expected = nss_params["beta0"] + nss_params["beta1"]
-        assert abs(nss_curve.short_rate - expected) < 1e-3
+        expected = (nss_params["beta0"] + nss_params["beta1"]) / 100
+        assert abs(nss_curve.short_rate - expected) < 1e-5
 
     def test_long_rate(self, nss_curve, nss_params):
-        assert abs(nss_curve.long_rate - nss_params["beta0"]) < 1e-3
+        assert abs(nss_curve.long_rate - nss_params["beta0"] / 100) < 1e-5
 
     def test_asymptote(self, nss_curve, nss_params):
-        # at very long maturities zero rate -> beta0
-        assert abs(nss_curve.zero_rate(1000) - nss_params["beta0"]) < 0.15
+        # at very long maturities zero rate -> beta0/100 (decimal)
+        assert abs(nss_curve.zero_rate(1000) - nss_params["beta0"] / 100) < 0.002
 
     def test_discount_factor_decreasing(self, nss_curve):
         maturities = [1, 2, 5, 10, 20]
@@ -134,7 +134,7 @@ class TestNSSCurve:
         df1 = nss_curve.discount(T1)
         df2 = nss_curve.discount(T2)
         fwd = nss_curve.forward_rate(T1, T2)
-        df2_implied = df1 * np.exp(-fwd / 100 * (T2 - T1))
+        df2_implied = df1 * np.exp(-fwd * (T2 - T1))
         assert abs(df2 - df2_implied) < 1e-3
 
     def test_parameters_roundtrip(self, nss_curve, nss_params):
@@ -142,9 +142,9 @@ class TestNSSCurve:
             assert abs(nss_curve.parameters[key] - val) < 1e-10
 
     def test_zero_rate_at_known_maturity(self, nss_curve):
-        # 10Y rate should be approximately 3.07% for these parameters
+        # 10Y rate should be ~0.0307 (3.07% in decimal) for these parameters
         zr = nss_curve.zero_rate(10.0)
-        assert 2.5 < zr < 3.5
+        assert 0.025 < zr < 0.035
 
     def test_describe(self, nss_curve):
         desc = nss_curve.describe()
@@ -271,10 +271,10 @@ class TestArrayCurveLogLinear:
             expected = np.exp(-FLAT_RATE * T)
             np.testing.assert_allclose(c.discount(T), expected, atol=1e-8)
 
-    def test_zero_rate_returns_percent(self):
+    def test_zero_rate_returns_decimal(self):
         c = ArrayCurve(MATURITIES, FLAT_RATES, interpolation="log_linear")
         for T in [1.0, 5.0, 10.0]:
-            np.testing.assert_allclose(c.zero_rate(T), FLAT_RATE * 100, atol=1e-4)
+            np.testing.assert_allclose(c.zero_rate(T), FLAT_RATE, atol=1e-4)
 
     def test_forward_rate_consistent_with_discount(self):
         mats  = np.array([1.0, 2.0, 5.0, 10.0])
@@ -282,7 +282,7 @@ class TestArrayCurveLogLinear:
         c = ArrayCurve(mats, rates)
         T1, T2 = 2.0, 5.0
         df1, df2 = c.discount(T1), c.discount(T2)
-        fwd_implied = -np.log(df2 / df1) / (T2 - T1) * 100
+        fwd_implied = -np.log(df2 / df1) / (T2 - T1)
         np.testing.assert_allclose(c.forward_rate(T1, T2), fwd_implied, atol=1e-5)
 
     def test_log_linear_non_negative_forward_rates(self):

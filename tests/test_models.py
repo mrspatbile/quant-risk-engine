@@ -40,7 +40,7 @@ def _synthetic_ois_data() -> pd.DataFrame:
     data = pd.DataFrame(
         {
             "years":           [1/12, 2/12, 3/12, 6/12, 9/12,  1.0,  2.0,  3.0,  5.0, 10.0, 15.0],
-            "zero_rate_pct":   [2.50, 2.50, 2.50, 2.50, 2.50, 2.50, 2.50, 2.50, 2.50,  2.50,  2.50],
+            "zero_rate_pct":   [0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025],
             "discount_factor": [
                 np.exp(-0.025 * t)
                 for t in [1/12, 2/12, 3/12, 6/12, 9/12, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0]
@@ -62,13 +62,13 @@ def flat_curve() -> OISCurve:
 @pytest.fixture
 def vasicek() -> VasicekProcess:
     """Standard Vasicek instance for reuse across tests."""
-    return VasicekProcess(kappa=0.1, theta=2.5, sigma=0.5)
+    return VasicekProcess(kappa=0.1, theta=0.025, sigma=0.005)
 
 
 @pytest.fixture
 def hw(flat_curve) -> HullWhiteProcess:
     """Hull-White calibrated to the flat 2.5% curve."""
-    return HullWhiteProcess(curve=flat_curve, kappa=0.1, sigma=0.5)
+    return HullWhiteProcess(curve=flat_curve, kappa=0.1, sigma=0.005)
 
 
 # ---------------------------------------------------------------------------
@@ -110,22 +110,22 @@ class TestDrawNormals:
 
 class TestVasicekProcess:
     def test_output_shape(self, vasicek):
-        paths = vasicek.simulate(x0=2.5, T=1.0, n_steps=252, n_paths=100, seed=0)
+        paths = vasicek.simulate(x0=0.025, T=1.0, n_steps=252, n_paths=100, seed=0)
         assert paths.shape == (100, 253)
 
     def test_initial_condition(self, vasicek):
-        paths = vasicek.simulate(x0=2.5, T=1.0, n_steps=252, n_paths=200, seed=0)
+        paths = vasicek.simulate(x0=0.025, T=1.0, n_steps=252, n_paths=200, seed=0)
         # Every path starts at x0
-        assert np.all(paths[:, 0] == 2.5)
+        assert np.all(paths[:, 0] == 0.025)
 
     def test_seed_reproducibility(self, vasicek):
-        p1 = vasicek.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=99)
-        p2 = vasicek.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=99)
+        p1 = vasicek.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=99)
+        p2 = vasicek.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=99)
         np.testing.assert_array_equal(p1, p2)
 
     def test_different_seeds_differ(self, vasicek):
-        p1 = vasicek.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=1)
-        p2 = vasicek.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=2)
+        p1 = vasicek.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=1)
+        p2 = vasicek.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=2)
         assert not np.array_equal(p1, p2)
 
     def test_antithetic_first_step_sum(self, vasicek):
@@ -134,31 +134,31 @@ class TestVasicekProcess:
         # deterministic_drift = x0 * exp(-κdt) + θ(1 - exp(-κdt))
         T, n_steps, n_paths = 1.0, 1, 100
         paths = vasicek.simulate(
-            x0=2.5, T=T, n_steps=n_steps, n_paths=n_paths,
+            x0=0.025, T=T, n_steps=n_steps, n_paths=n_paths,
             antithetic=True, seed=0
         )
         dt = T / n_steps
         exp_kdt = np.exp(-vasicek.kappa * dt)
-        deterministic = 2.5 * exp_kdt + vasicek.theta * (1.0 - exp_kdt)
+        deterministic = 0.025 * exp_kdt + vasicek.theta * (1.0 - exp_kdt)
         # sum of antithetic pair at step 1 == 2 * deterministic part
         pair_sums = paths[:50, 1] + paths[50:, 1]
         np.testing.assert_allclose(pair_sums, 2.0 * deterministic, rtol=1e-10)
 
     def test_long_run_mean_reversion(self):
         # For large T, E[r(T)] → θ regardless of r0
-        proc = VasicekProcess(kappa=1.0, theta=3.0, sigma=0.3)
-        paths = proc.simulate(x0=0.5, T=20.0, n_steps=1000, n_paths=5000, seed=0)
+        proc = VasicekProcess(kappa=1.0, theta=0.03, sigma=0.003)
+        paths = proc.simulate(x0=0.005, T=20.0, n_steps=1000, n_paths=5000, seed=0)
         mean_terminal = paths[:, -1].mean()
-        # With κ=1.0 and T=20, exp(-κT) ≈ 2e-9, so E[r(T)] ≈ θ=3.0
-        assert abs(mean_terminal - 3.0) < 0.05
+        # With κ=1.0 and T=20, exp(-κT) ≈ 2e-9, so E[r(T)] ≈ θ=0.03
+        assert abs(mean_terminal - 0.03) < 0.0005
 
     def test_invalid_kappa_raises(self):
         with pytest.raises(ValueError):
-            VasicekProcess(kappa=-0.1, theta=2.5, sigma=0.5)
+            VasicekProcess(kappa=-0.1, theta=0.025, sigma=0.005)
 
     def test_invalid_sigma_raises(self):
         with pytest.raises(ValueError):
-            VasicekProcess(kappa=0.1, theta=2.5, sigma=-0.5)
+            VasicekProcess(kappa=0.1, theta=0.025, sigma=-0.005)
 
     def test_describe_contains_name(self, vasicek):
         assert "Vasicek" in vasicek.describe()
@@ -170,20 +170,20 @@ class TestVasicekProcess:
 
 class TestHullWhiteProcess:
     def test_output_shape(self, hw):
-        paths = hw.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=100, seed=0)
+        paths = hw.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=100, seed=0)
         assert paths.shape == (100, 53)
 
     def test_initial_condition(self, hw):
-        paths = hw.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=100, seed=0)
-        assert np.all(paths[:, 0] == 2.5)
+        paths = hw.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=100, seed=0)
+        assert np.all(paths[:, 0] == 0.025)
 
     def test_seed_reproducibility(self, hw):
-        p1 = hw.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=7)
-        p2 = hw.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=7)
+        p1 = hw.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=7)
+        p2 = hw.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=7)
         np.testing.assert_array_equal(p1, p2)
 
     def test_antithetic_shape(self, hw):
-        paths = hw.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=100,
+        paths = hw.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=100,
                             antithetic=True, seed=0)
         assert paths.shape == (100, 53)
 
@@ -191,13 +191,13 @@ class TestHullWhiteProcess:
         # Same logic as Vasicek: at step 1, noise cancels, leaving 2 * drift
         T, n_steps, n_paths = 1.0, 1, 100
         paths = hw.simulate(
-            x0=2.5, T=T, n_steps=n_steps, n_paths=n_paths,
+            x0=0.025, T=T, n_steps=n_steps, n_paths=n_paths,
             antithetic=True, seed=0,
         )
         dt = T / n_steps
         theta_0 = hw._theta(0.0)
         # Euler drift: r0 + (θ(0) - κ r0) dt
-        deterministic = 2.5 + (theta_0 - hw.kappa * 2.5) * dt
+        deterministic = 0.025 + (theta_0 - hw.kappa * 0.025) * dt
         pair_sums = paths[:50, 1] + paths[50:, 1]
         np.testing.assert_allclose(pair_sums, 2.0 * deterministic, rtol=1e-10)
 
@@ -207,23 +207,23 @@ class TestHullWhiteProcess:
         proc = HullWhiteProcess(
             curve=OISCurve(_synthetic_ois_data()),
             kappa=0.1,
-            sigma=0.01,   # near-deterministic
+            sigma=0.0001,   # near-deterministic
         )
-        paths = proc.simulate(x0=2.5, T=5.0, n_steps=60, n_paths=2000, seed=0)
-        # Check mean at a few time points against the flat forward rate (2.5%)
+        paths = proc.simulate(x0=0.025, T=5.0, n_steps=60, n_paths=2000, seed=0)
+        # Check mean at a few time points against the flat forward rate (0.025 = 2.5%)
         for col in [12, 24, 60]:   # 1Y, 2Y, 5Y
             mean_r = paths[:, col].mean()
-            assert abs(mean_r - 2.5) < 0.10, (
-                f"E[r] at column {col} = {mean_r:.4f}%, expected ≈ 2.5%"
+            assert abs(mean_r - 0.025) < 0.001, (
+                f"E[r] at column {col} = {mean_r:.6f}, expected ≈ 0.025"
             )
 
     def test_invalid_kappa_raises(self, flat_curve):
         with pytest.raises(ValueError):
-            HullWhiteProcess(curve=flat_curve, kappa=0.0, sigma=0.5)
+            HullWhiteProcess(curve=flat_curve, kappa=0.0, sigma=0.005)
 
     def test_invalid_sigma_raises(self, flat_curve):
         with pytest.raises(ValueError):
-            HullWhiteProcess(curve=flat_curve, kappa=0.1, sigma=0.0)
+            HullWhiteProcess(curve=flat_curve, kappa=0.1, sigma=0.0)  # sigma=0 invalid
 
     def test_describe_contains_name(self, hw):
         assert "Hull-White" in hw.describe()
@@ -239,7 +239,7 @@ from quant_risk.models.equity import GBMProcess, LocalVolProcess
 class TestGBMProcess:
     @pytest.fixture
     def gbm(self):
-        return GBMProcess(r=2.5, sigma=20.0)
+        return GBMProcess(r=0.025, sigma=0.20)
 
     def test_output_shape(self, gbm):
         paths = gbm.simulate(x0=100.0, T=1.0, n_steps=252, n_paths=100, seed=0)
@@ -260,7 +260,7 @@ class TestGBMProcess:
         S0    = 100.0
         paths = gbm.simulate(x0=S0, T=T, n_steps=252, n_paths=10000,
                               antithetic=True, seed=0)
-        expected = S0 * np.exp((gbm.r - gbm.q) / 100 * T)
+        expected = S0 * np.exp((gbm.r - gbm.q) * T)
         # Allow 0.5% tolerance
         assert abs(paths[:, -1].mean() - expected) < 0.5 * expected / 100
 
@@ -280,9 +280,9 @@ class TestGBMProcess:
         paths = gbm.simulate(x0=100.0, T=1.0, n_steps=n_steps, n_paths=n_paths,
                              antithetic=True, seed=0)
         dt         = 1.0
-        drift_step = ((gbm.r - gbm.q) / 100 - (gbm.sigma / 100) ** 2 / 2) * dt
-        log_ret_base = np.log(paths[:50, 1] / 100.0)
-        log_ret_anti = np.log(paths[50:, 1] / 100.0)
+        drift_step = ((gbm.r - gbm.q) - gbm.sigma ** 2 / 2) * dt
+        log_ret_base = np.log(paths[:50, 1] / paths[:50, 0])
+        log_ret_anti = np.log(paths[50:, 1] / paths[50:, 0])
         # Sum of log-returns of antithetic pair = 2 × drift (noise cancels)
         np.testing.assert_allclose(
             log_ret_base + log_ret_anti, 2 * drift_step, rtol=1e-10
@@ -290,7 +290,7 @@ class TestGBMProcess:
 
     def test_invalid_sigma_raises(self):
         with pytest.raises(ValueError):
-            GBMProcess(r=2.5, sigma=0.0)
+            GBMProcess(r=0.025, sigma=0.0)
 
     def test_describe_contains_name(self, gbm):
         assert "GBM" in gbm.describe()
@@ -304,7 +304,7 @@ class TestLocalVolProcess:
     @pytest.fixture
     def flat_lv(self):
         # Constant local vol of 20% → should behave like GBM
-        return LocalVolProcess(r=2.5, local_vol_fn=lambda S, t: 20.0)
+        return LocalVolProcess(r=0.025, local_vol_fn=lambda S, t: 0.20)
 
     def test_output_shape(self, flat_lv):
         paths = flat_lv.simulate(x0=100.0, T=1.0, n_steps=52, n_paths=100, seed=0)
@@ -320,7 +320,7 @@ class TestLocalVolProcess:
 
     def test_flat_lv_matches_gbm_distribution(self):
         # With constant σ, LocalVol terminal distribution should match GBM closely
-        r, sigma, S0, T = 2.5, 20.0, 100.0, 1.0
+        r, sigma, S0, T = 0.025, 0.20, 100.0, 1.0
         gbm  = GBMProcess(r=r, sigma=sigma)
         lv   = LocalVolProcess(r=r, local_vol_fn=lambda S, t: sigma)
         n    = 5000
@@ -338,11 +338,11 @@ class TestLocalVolProcess:
 
     def test_vol_surface_affects_distribution(self):
         # Skewed vol shifts the distribution relative to flat vol
-        r, S0, T = 2.5, 100.0, 1.0
-        flat_lv  = LocalVolProcess(r=r, local_vol_fn=lambda S, t: 20.0)
+        r, S0, T = 0.025, 100.0, 1.0
+        flat_lv  = LocalVolProcess(r=r, local_vol_fn=lambda S, t: 0.20)
         # Higher vol for low S (skew): ITM calls more expensive
         skew_lv  = LocalVolProcess(
-            r=r, local_vol_fn=lambda S, t: 20.0 + 5.0 * max(100.0 - S, 0) / 100.0
+            r=r, local_vol_fn=lambda S, t: 0.20 + 0.05 * max(100.0 - S, 0) / 100.0
         )
         n = 3000
         p_flat = flat_lv.simulate(x0=S0, T=T, n_steps=52, n_paths=n, seed=0)
@@ -366,41 +366,41 @@ class TestLocalVolProcess:
 class TestCIRProcess:
     @pytest.fixture
     def cir(self):
-        # κ=0.3, θ=3.0, σ=0.6: Feller = 2·0.3·3.0 = 1.8 > 0.6² = 0.36 ✓
-        return CIRProcess(kappa=0.3, theta=3.0, sigma=0.6)
+        # κ=0.3, θ=0.03, σ=0.06: Feller = 2·0.3·0.03 = 0.018 > 0.06² = 0.0036 ✓
+        return CIRProcess(kappa=0.3, theta=0.03, sigma=0.06)
 
     def test_output_shape(self, cir):
-        paths = cir.simulate(x0=2.5, T=1.0, n_steps=252, n_paths=100, seed=0)
+        paths = cir.simulate(x0=0.025, T=1.0, n_steps=252, n_paths=100, seed=0)
         assert paths.shape == (100, 253)
 
     def test_initial_condition(self, cir):
-        paths = cir.simulate(x0=2.5, T=1.0, n_steps=252, n_paths=200, seed=0)
-        np.testing.assert_allclose(paths[:, 0], 2.5)
+        paths = cir.simulate(x0=0.025, T=1.0, n_steps=252, n_paths=200, seed=0)
+        np.testing.assert_allclose(paths[:, 0], 0.025)
 
     def test_positivity(self, cir):
         # Exact chi-squared simulation: rates are structurally non-negative
-        paths = cir.simulate(x0=2.5, T=5.0, n_steps=250, n_paths=500, seed=0)
+        paths = cir.simulate(x0=0.025, T=5.0, n_steps=250, n_paths=500, seed=0)
         assert (paths >= 0).all()
 
     def test_seed_reproducibility(self, cir):
-        p1 = cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=7)
-        p2 = cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=7)
+        p1 = cir.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=7)
+        p2 = cir.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=7)
         np.testing.assert_array_equal(p1, p2)
 
     def test_different_seeds_differ(self, cir):
-        p1 = cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=1)
-        p2 = cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=50, seed=2)
+        p1 = cir.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=1)
+        p2 = cir.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=50, seed=2)
         assert not np.array_equal(p1, p2)
 
     def test_long_run_mean_reversion(self):
         # E[r(T)] → θ as T → ∞ for large κ (same formula as Vasicek)
-        proc = CIRProcess(kappa=1.0, theta=3.0, sigma=0.5)
-        paths = proc.simulate(x0=0.5, T=20.0, n_steps=1000, n_paths=5000, seed=0)
-        assert abs(paths[:, -1].mean() - 3.0) < 0.05
+        proc = CIRProcess(kappa=1.0, theta=0.03, sigma=0.05)
+        paths = proc.simulate(x0=0.005, T=20.0, n_steps=1000, n_paths=5000, seed=0)
+        assert abs(paths[:, -1].mean() - 0.03) < 0.0005
 
     def test_antithetic_raises(self, cir):
         with pytest.raises(NotImplementedError, match="antithetic"):
-            cir.simulate(x0=2.5, T=1.0, n_steps=52, n_paths=100, antithetic=True)
+            cir.simulate(x0=0.025, T=1.0, n_steps=52, n_paths=100, antithetic=True)
 
     def test_negative_x0_raises(self, cir):
         with pytest.raises(ValueError, match="x0"):
@@ -408,16 +408,16 @@ class TestCIRProcess:
 
     def test_invalid_kappa_raises(self):
         with pytest.raises(ValueError):
-            CIRProcess(kappa=0.0, theta=2.5, sigma=0.3)
+            CIRProcess(kappa=0.0, theta=0.025, sigma=0.03)
 
     def test_invalid_sigma_raises(self):
         with pytest.raises(ValueError):
-            CIRProcess(kappa=0.1, theta=2.5, sigma=0.0)
+            CIRProcess(kappa=0.1, theta=0.025, sigma=0.0)
 
     def test_feller_violation_warns(self):
         # κ=0.1, θ=1.0, σ=1.0: 2·0.1·1.0 = 0.2 ≤ 1.0² = 1.0
         with pytest.warns(UserWarning, match="Feller"):
-            CIRProcess(kappa=0.1, theta=1.0, sigma=1.0)
+            CIRProcess(kappa=0.1, theta=0.01, sigma=0.1)
 
     def test_describe_contains_name(self, cir):
         assert "CIR" in cir.describe()
@@ -439,7 +439,7 @@ class TestMCSimulator:
     def sim(self, vasicek):
         return MCSimulator(
             process=vasicek,
-            x0=2.5,
+            x0=0.025,
             T=5.0,
             n_steps=60,
             n_paths=1000,
@@ -474,11 +474,11 @@ class TestMCSimulator:
         assert (sim.sdf(2.5) > 0).all()
 
     def test_sdf_deterministic(self):
-        # Near-zero sigma collapses variance: D(0,T) ≈ exp(-r/100 * T)
-        r, T = 3.0, 2.0
-        proc = VasicekProcess(kappa=1.0, theta=r, sigma=0.001)
+        # Near-zero sigma collapses variance: D(0,T) ≈ exp(-r * T)
+        r, T = 0.03, 2.0
+        proc = VasicekProcess(kappa=1.0, theta=r, sigma=0.00001)
         sim = MCSimulator(proc, x0=r, T=T, n_steps=200, n_paths=500, seed=0)
-        expected = np.exp(-r / 100 * T)
+        expected = np.exp(-r * T)
         np.testing.assert_allclose(sim.sdf(T).mean(), expected, rtol=0.01)
 
     # -- sdf_between --------------------------------------------------------
@@ -501,12 +501,12 @@ class TestMCSimulator:
         assert sim.price(lambda paths: np.zeros(paths.shape[0])) == 0.0
 
     def test_price_zcb_approximation(self):
-        # E^Q[D(0,T) * 1] = P(0,T) ≈ exp(-r/100 * T) under flat r
-        r, T = 2.5, 3.0
-        proc = VasicekProcess(kappa=1.0, theta=r, sigma=0.001)
+        # E^Q[D(0,T) * 1] = P(0,T) ≈ exp(-r * T) under flat r
+        r, T = 0.025, 3.0
+        proc = VasicekProcess(kappa=1.0, theta=r, sigma=0.00001)
         sim = MCSimulator(proc, x0=r, T=T, n_steps=180, n_paths=500, seed=0)
         price = sim.price(lambda paths: np.ones(paths.shape[0]))
-        np.testing.assert_allclose(price, np.exp(-r / 100 * T), rtol=0.01)
+        np.testing.assert_allclose(price, np.exp(-r * T), rtol=0.01)
 
     # -- exposure_profile ---------------------------------------------------
 

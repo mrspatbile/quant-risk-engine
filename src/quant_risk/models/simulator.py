@@ -12,10 +12,10 @@ Wraps a StochasticProcess and provides:
 
 Rate convention
 ---------------
-Paths are assumed to carry SHORT RATES in percent throughout (consistent with
-VasicekProcess and HullWhiteProcess). The path integral is divided by 100 before
-exponentiation. For equity simulations (GBMProcess), discount the terminal payoff
-with a deterministic exp(-r/100 * T) factor in the payoff function itself.
+Paths carry SHORT RATES in decimal throughout (consistent with VasicekProcess
+and HullWhiteProcess). The path integral is used directly in the exponent:
+D(0,t) = exp(-∫₀ᵗ r(s)ds). For equity simulations (GBMProcess), discount
+the terminal payoff with a deterministic exp(-r * T) factor in the payoff.
 
 Design contract for payoff and MTM functions
 --------------------------------------------
@@ -45,7 +45,7 @@ class MCSimulator:
     process : StochasticProcess
         The stochastic process to simulate (e.g. VasicekProcess, HullWhiteProcess).
     x0 : float
-        Initial value (short rate in percent for rate processes; price for equity).
+        Initial value (short rate in decimal for rate processes; price for equity).
     T : float
         Simulation horizon in years.
     n_steps : int
@@ -86,10 +86,10 @@ class MCSimulator:
         )
 
         # Pre-compute cumulative path integral ∫₀ᵗ r(s)ds at each grid point.
-        # Divides by 100 to convert percent → decimal before integration.
+        # Paths are in decimal — no conversion needed before integration.
         # Shape: (n_paths, n_steps) — cum_int[:, k] = ∫₀^{(k+1)·dt} r(s)ds
         self._cum_int = np.cumsum(
-            self._paths[:, :-1] / 100.0 * self._dt, axis=1
+            self._paths[:, :-1] * self._dt, axis=1
         )
 
     # ------------------------------------------------------------------
