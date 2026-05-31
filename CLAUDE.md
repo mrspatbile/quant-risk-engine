@@ -6,26 +6,24 @@ This file tells Claude Code how to work in this repository. Read it before doing
 
 ## What this project is
 
-A Python-based quantitative risk framework built on QuantLib, covering banking and
-asset management use cases in a European regulatory context. Scope includes yield
+A Python-based quantitative risk **library** built on QuantLib. Scope includes yield
 curve construction, fixed-income and derivatives pricing, stochastic rate and equity
-models, XVA, IRRBB and FRTB SA regulatory metrics, AIFMD fund liquidity risk, and
-portfolio management.
+models, Monte Carlo simulation, and XVA (CVA, DVA, FVA, MVA).
 
 The library under `src/quant_risk/` is the core infrastructure: production-quality
 implementations of curves, instruments, models, and risk metrics, built on QuantLib
 and real market data sources. The notebooks consume this infrastructure — they derive
 the mathematics, walk through the implementation, and demonstrate the full
-computation chain from market data ingestion to regulatory output. They are worked
-examples of a real system, not standalone scripts. Interactive dashboards built on
-this library live in a separate repository.
+computation chain from market data ingestion to pricing output. They are worked
+examples of a real system, not standalone scripts.
+
+This is a **pricing and modelling library**. Regulatory applications that consume
+it live in separate repos:
+- `banking-risk` — IRRBB, FRTB SA, ICAAP (banking regulatory applications)
+- `manco-risk-mngmt` — AIFMD II fund liquidity risk (fund management applications)
 
 Regulatory accuracy is non-negotiable. A wrong number here is not just a bug — it
 can be a reportable compliance incident.
-
-There is a separate project, manco-risk-mngmt, that covers similar regulatory
-territory with intentional simplifications for learning purposes. Do not conflate
-the two. This project has none of those simplifications.
 
 ---
 
@@ -43,36 +41,39 @@ the two. This project has none of those simplifications.
 
 quant-risk-engine/
 ├── data/
-│   ├── cache/              # Parquet cache — ECB, FRED, yfinance, FF factors, GPR
-│   │   └── external/       # ExternalStore cache subdirectory
-│   ├── processed/          # Bootstrapped OIS curves, fund position CSVs
+│   ├── cache/              # Parquet cache — ECB (data/cache/ecb/), FRED (data/cache/fred/),
+│   │   │                   # yfinance, FF factors, GPR (data/cache/external/)
+│   ├── processed/          # Bootstrapped OIS curves (parquet)
 │   └── raw/                # Gitignored
 ├── docs/                   # Regulatory reference documents (not executable)
 ├── notebooks/
-│   ├── 01_yield_curves/
-│   ├── 02_asset_pricing/
-│   ├── 03_simulations/     # Planned — Hull-White, Vasicek, Monte Carlo, XVA
-│   ├── 04_bank_risk/       # Planned — FRTB SA, ICAAP
-│   ├── 05_fund_risk/
+│   ├── 01_yield_curves/    # NSS, OIS bootstrapping (nb03 IRRBB moving to banking-risk)
+│   ├── 02_asset_pricing/   # Bonds, swaps, FX forwards, options, CDS, callable bonds
+│   ├── 03_simulations/     # Vasicek, Hull-White, CIR, MC, XVA (complete)
+│   ├── 04_bank_risk/       # Reference docs
 │   └── 06_portfolio_management/
 ├── configs/                # market_config.yaml
-├── scripts/                # Live integration scripts — test_ecb.py, test_ecb_full.py
-│                           # These make real API calls. Not the same as tests/.
 ├── src/quant_risk/
 │   ├── config.py           # Env vars, path constants — imported everywhere
 │   ├── setup.py            # Notebook setup helpers (base, asset_pricing, macro variants)
 │   ├── curves/             # OISCurve, NSSCurve — QuantLib wrappers
-│   ├── data/               # ECBClient, FedClient — ABC-based; ExternalStore (yfinance/FF/GPR)
+│   │   └── base.py         # DiscountCurve ABC — includes _select_params_row()
+│   ├── data/               # ECBClient, FedClient — CacheMixin-backed, date-aware
+│   │   └── cache_mixin.py  # CacheMixin — _load_cache, _save_cache, _merge_cache
 │   ├── instruments/        # Bond, IRSwap, FXForward, VanillaOption, CDS
-│   ├── risk/               # Empty placeholder — risk calculators planned
+│   ├── models/             # VasicekProcess, HullWhiteProcess, CIRProcess, MCSimulator
+│   │   ├── rates.py        # Short rate processes
+│   │   ├── equity.py       # GBMProcess, LocalVolProcess
+│   │   └── simulator.py    # MCSimulator — path generation, exposure profiles, SDF
+│   ├── risk/               # XVAEngine, Trade
+│   │   └── xva.py          # CVA, DVA, FVA, MVA under netting set
 │   └── utils/              # Empty placeholder
-└── tests/                  # Pytest unit tests — no live API calls
-
+└── tests/                  # Pytest unit tests — 268 passing, no live API calls
 
 
 The following source files exist but are empty placeholders:
 `data/ecb_registry.py`, `data/ecb_store.py`, `data/fed_registry.py`, `data/fed_store.py`,
-`risk/__init__.py`, `utils/__init__.py`.
+`utils/__init__.py`.
 
 ---
 
@@ -205,23 +206,26 @@ very long-dated instruments.
 
 ## Active work
 
-Sprint 5 is complete (CI/CD pipeline, `FundLiquiditySimulator` test coverage,
-QuantLib global state context manager, structured logging, input validation).
+Sprints 1–6 complete. The library is feature-complete for its core scope.
 
-Current sprint (Sprint 6) covers Module 3 — Monte Carlo simulations and XVA:
+**Sprint 6 delivered (all complete):**
+- QRE-47/48/49/107/50/51 — MCSimulator, short rate and equity path notebooks,
+  Longstaff-Schwartz callable bond, convergence analysis
+- QRE-52/53/54/55/56/57 — Full XVA stack: CVA, DVA, FVA, MVA notebooks and
+  `XVAEngine` OOP class with netting set support
 
-- **QRE-47** MC simulator
-  - **QRE-48** MC interest rate paths notebook — antithetic sampling
-  - **QRE-49** MC bond and swap pricing notebook — convergence analysis
-  - **QRE-50** MC equity paths notebook — GBM, local vol
-  - **QRE-51** MC simulator OOP class
+**Infrastructure delivered alongside Sprint 6:**
+- `DiscountCurve._select_params_row()` — shared date selection for all curve subclasses
+- `CacheMixin._merge_cache()` — append-only local history store (sort, deduplicate)
+- `ECBClient` and `FedClient` are now `CacheMixin`-backed with date-aware fetching:
+  cache hit on exact date, ECB/FRED fetch with `endPeriod` on miss
+- `OISCurve.from_processed()` prefers parquet over legacy CSV
+- `NSSCurve.from_ecb(date=X)` passes date through to ECB query correctly
 
-- **QRE-52** XVA
-  - **QRE-53** CVA notebook — expected exposure, default modelling
-  - **QRE-54** FVA notebook — funding cost, CSA impact, OIS vs SOFR
-  - **QRE-55** MVA notebook — initial margin, SIMM methodology
-  - **QRE-56** XVA aggregation notebook — CVA + DVA + FVA
-  - **QRE-57** XVA OOP class
+**Current focus:**
+- Repo restructure: banking regulatory applications moving to `banking-risk` repo
+  (IRRBB EVE/NII notebook first)
+- notebooks/01_yield_curves/03_irrbb_eve.ipynb moving to `banking-risk`
 
 When starting a task, ask me for the Jira ticket number to include in the commit
 message.
@@ -236,10 +240,8 @@ of the items below, say so explicitly when you explain your approach.
 
 | Regulation | Where it matters |
 |---|---|
-| EBA/RTS/2022/10 | IRRBB EVE SOT 15%, NII SOT 5% — do not change shock parameters |
+| EBA/RTS/2022/10 | IRRBB EVE SOT 15%, NII SOT 5% — shock parameters are regulatory constants, do not change |
 | FRTB SA (CRR3 Art. 325) | GIRR delta, key rate DV01 at prescribed vertices [0.25Y, 0.5Y, 1Y, 2Y, 3Y, 5Y, 10Y, 15Y, 20Y, 30Y] |
-| AIFMD II (2024/927/EU) | Fund liquidity dashboard — LCR, Annex IV, LMT simulation |
-| ESMA34-671404336-1364 | Gate/swing/suspension calibration (April 2025 guidelines) |
 | EMIR | OIS discounting throughout — collateralised derivatives |
 | IFRS 9 / IFRS 13 | Fair value levels, OIS discounting, Level 2 inputs |
 

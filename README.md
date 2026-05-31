@@ -1,18 +1,20 @@
 ![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
 ![QuantLib](https://img.shields.io/badge/QuantLib-1.42.1-orange)
 ![Tests](https://github.com/mrspatbile/quant-risk-engine/actions/workflows/test.yml/badge.svg)
-![Regulatory](https://img.shields.io/badge/Regulatory-IRRBB%20%7C%20FRTB%20SA%20%7C%20AIFMD%20II-e91e8c)
+![Tests passing](https://img.shields.io/badge/tests-268%20passing-brightgreen)
 
 # Quant Risk Engine
 
-Python-based quantitative risk framework built on QuantLib, designed as a modular platform covering both banking and asset management use cases in a European regulatory context.
+Python quantitative risk **library** built on QuantLib. Covers market data ingestion,
+yield curve construction, fixed-income and derivatives pricing, stochastic rate and
+equity models, Monte Carlo simulation, and XVA.
 
-Implements market data ingestion (ECB, FRED), yield curve construction, and fixed-income instrument pricing. Includes selected regulatory components, with initial focus on IRRBB-style interest rate risk metrics and exploratory extensions toward FRTB and AIFMD-related use cases.
+This is the **pricing and modelling core**. Banking regulatory applications
+(IRRBB, FRTB) consume it from [`banking-risk`](https://github.com/mrspatbile/banking-risk).
+Fund risk applications consume it from [`manco-risk-mngmt`](https://github.com/mrspatbile/manco-risk-mngmt).
 
-Another repo consumes the output into Streamlit dashboard for portfolio and liquidity risk visualisation across fund strategies.
-
-**Stack:** Python 3.13 | QuantLib 1.42 | ECB SDW | FRED API  
-**Status:** Actively developed -- Sprint 6 in progress
+**Stack:** Python 3.13 | QuantLib 1.42.1 | ECB SDW | FRED API  
+**Status:** Sprints 1–6 complete
 
 ---
 
@@ -20,14 +22,15 @@ Another repo consumes the output into Streamlit dashboard for portfolio and liqu
 
 | Domain | Status |
 |--------|--------|
-| Yield curve construction -- OIS bootstrapping, NSS | Done |
-| Instrument pricing -- bonds, IR swaps, FX forwards, options, callable bonds and strategies (carry trade and FI strats) | Done |
-| IRRBB -- EVE and NII supervisory outlier tests | Done |
-| FRTB SA -- GIRR delta, key rate DV01 | Done |
-| Fund liquidity risk -- AIFMD II, Annex IV, LMTs | Done |
-| Portfolio Management -- macrofactors, risk-on, riskoff regimes + factor model portf. construction, attribution, hedging | Done |
-| Monte Carlo + short rate models | In progress -- Sprint 6 |
-| XVA -- CVA, FVA, MVA + neural network approximator | In progress -- Sprint 6 |
+| Yield curve construction — OIS bootstrapping, NSS parametric | Done |
+| Instrument pricing — bonds, IR swaps, FX forwards, options, CDS, callable bonds | Done |
+| Fixed income strategies — carry trade, curve plays, futures convexity | Done |
+| Short rate models — Vasicek, Hull-White, CIR (exact simulation) | Done |
+| Monte Carlo — path generation, antithetic sampling, convergence analysis | Done |
+| XVA — CVA, DVA, FVA, MVA; XVAEngine with netting set | Done |
+| Portfolio management — macro factors, regime detection, factor models | Done |
+| FRTB SA GIRR delta — key rate DV01 at prescribed vertices | Done |
+| Data layer — ECB/FRED date-aware local history store, parquet cache | Done |
 
 ---
 
@@ -37,26 +40,23 @@ Another repo consumes the output into Streamlit dashboard for portfolio and liqu
 quant-risk-engine/
 ├── configs/            # market_config.yaml
 ├── data/
-│   ├── cache/          # Parquet cache -- ECB, FRED, yfinance, FF factors, GPR
-│   │   └── external/   # ExternalStore cache subdirectory
-│   ├── processed/      # Bootstrapped curves, fund position data
+│   ├── cache/          # Parquet history store — ECB (ecb/), FRED (fred/), external/
+│   ├── processed/      # Bootstrapped OIS curves (parquet)
 │   └── raw/
 ├── docs/
 ├── notebooks/
-│   ├── 01_yield_curves/
-│   ├── 02_asset_pricing/
-│   ├── 03_simulations/
-│   ├── 04_bank_risk/
-│   ├── 05_fund_risk/
+│   ├── 01_yield_curves/   # NSS, OIS bootstrapping
+│   ├── 02_asset_pricing/  # Bonds, swaps, FX, options, CDS, callable bonds, strategies
+│   ├── 03_simulations/    # Vasicek, HW, CIR, MC, XVA (complete)
+│   ├── 04_bank_risk/      # Reference docs
 │   └── 06_portfolio_management/
-├── scripts/            # Live integration scripts -- real API calls, not pytest tests
 ├── src/quant_risk/
-│   ├── data/           # ECBClient, FedClient -- ABC-based; ExternalStore (yfinance/FF/GPR)
-│   ├── curves/         # OISCurve, NSSCurve -- QuantLib wrappers
+│   ├── curves/         # OISCurve, NSSCurve; DiscountCurve ABC with _select_params_row
+│   ├── data/           # ECBClient, FedClient (CacheMixin-backed); ExternalStore
 │   ├── instruments/    # Bond, IRSwap, FXForward, VanillaOption, CDS
-│   └── risk/           # Risk calculators (in progress)
-└── tests/              # Pytest unit tests -- 184+ passing
-
+│   ├── models/         # VasicekProcess, HullWhiteProcess, CIRProcess, MCSimulator
+│   └── risk/           # XVAEngine, Trade
+└── tests/              # Pytest unit tests — 268 passing
 ```
 
 ---
@@ -96,14 +96,17 @@ quant-risk-engine/
 
 ## Module 3 -- Simulations
 
-Planned -- Sprint 6/7/8.
-
 | Notebook | Description |
 |----------|-------------|
-| Vasicek, Hull-White, CIR | Short rate model calibration and path generation |
-| Monte Carlo | Path generation, variance reduction, convergence |
-| XVA | CVA, FVA, MVA using simulated exposure profiles |
-| Neural network XVA | Deep XVA -- NN approximation of Expected Exposure |
+| 05_vasicek_model.ipynb | SDE, exact Gaussian simulation, affine bond pricing, OIS calibration |
+| 06_hw_model.ipynb | Hull-White no-arbitrage, future bond prices, Jamshidian swaption, κ-σ landscape |
+| 07_cir_model.ipynb | Non-central χ² simulation, Feller condition, CIR bond pricing |
+| 08_cva.ipynb | Expected exposure, hazard rate model, CVA, DVA, SA-CVA (CRR3 Art. 383) |
+| 09_fva.ipynb | Funding cost/benefit, CSA types, OIS vs SOFR funding |
+| 10_mva.ipynb | SIMM initial margin, MPOR scaling, bilateral vs cleared |
+| 11_xva_aggregation.ipynb | CVA + DVA + FVA + MVA under netting set, netting benefit |
+
+**OOP:** `VasicekProcess`, `HullWhiteProcess`, `CIRProcess`, `MCSimulator`, `XVAEngine`, `Trade`.
 
 ---
 
@@ -120,20 +123,8 @@ dashboard planned.
 
 ## Module 5 -- Fund Risk
 
-| Notebook | Description |
-|----------|-------------|
-| fund_reg.md | Regulation reference -- AIFMD, AIFMD II, UCITS, IFRS 13, Luxembourg vehicles |
-| liquidity_fund_risk.ipynb | Full AIFMD liquidity risk framework -- bucketing, LCR, stress testing, Annex IV, LMT simulation |
-
-**Fund types covered:** Multi-asset AIF, Credit AIF (IG/HY/CLO/private credit),
-Leveraged AIF (long/short equity with derivatives), Real Estate AIF (REITs + direct property).
-
-**LMT simulation:** Redemption gate with contagion multiplier, swing pricing,
-suspension trigger -- liquid sleeve depletion modelled explicitly per
-ESMA34-671404336-1364 board-decision framework.
-
-**Regulatory basis:** Delegated Regulation 231/2013, AIFMD II Directive 2024/927/EU,
-ESMA34-671404336-1364 (Guidelines on LMTs, April 2025), ESMA/2013/232 (Annex IV).
+Fund liquidity risk has moved to [`manco-risk-mngmt`](https://github.com/mrspatbile/manco-risk-mngmt)
+(AIFMD II, Annex IV, LMT simulation, board risk reporting).
 
 ---
 
@@ -156,10 +147,6 @@ Factor model theory, portfolio optimization, attribution and hedging.
 | CRR3 / FRTB SA | Bond and swap notebooks -- GIRR delta, key rate DV01 |
 | EMIR | OIS discounting throughout -- collateralised derivatives |
 | IFRS 13 | Fair value levels -- FX forwards notebook, fund_reg.md |
-| AIFMD (2011/61/EU) | Fund liquidity notebook and dashboard |
-| Delegated Reg. 231/2013 | Liquidity bucketing, stress testing, Annex IV |
-| AIFMD II (2024/927/EU) | LMT simulation -- gate, swing, suspension |
-| ESMA34-671404336-1364 | Suspension trigger calibration |
 | Basel IV / CRR3 | bank_reg.md reference |
 | ICAAP / ILAAP | bank_reg.md reference |
 
@@ -170,27 +157,34 @@ Factor model theory, portfolio optimization, attribution and hedging.
 ```
 src/quant_risk/
 ├── curves/
-│   ├── base.py         # DiscountCurve ABC
-│   ├── ois.py          # OISCurve -- QuantLib bootstrapping
-│   └── nss.py          # NSSCurve -- Nelson-Siegel-Svensson
+│   ├── base.py         # DiscountCurve ABC — _select_params_row() shared date utility
+│   ├── ois.py          # OISCurve — QuantLib log-cubic bootstrapping, parquet persistence
+│   └── nss.py          # NSSCurve — Nelson-Siegel-Svensson, date-aware from_ecb()
 ├── data/
 │   ├── base.py         # CentralBankClient ABC
-│   ├── ecb.py          # ECBClient -- ESTR, NSS, MMSR, FX
-│   ├── fed.py          # FedClient -- SOFR, US Treasury CMT
-│   └── external_store.py  # ExternalStore -- yfinance, FF factors, GPR
-└── instruments/
-    ├── base.py         # Instrument ABC
-    ├── bond.py         # Bond -- OIS discounting, z-spread, key rate DV01
-    ├── cds.py          # hazard rate, credit triangle, recovery rate, ISDA standards
-    ├── swap.py         # IRSwap -- multi-curve, par rate, MTM, DV01
-    ├── fx_forward.py   # FXForward -- CIP, NPV, delta FX/IR
-    └── option.py       # VanillaOption -- BSM, implied vol (in progress)
+│   ├── cache_mixin.py  # CacheMixin — _load/_save/_merge_cache (append-only history store)
+│   ├── ecb.py          # ECBClient — ESTR, NSS, MMSR OIS, FX; date-aware with local store
+│   ├── fed.py          # FedClient — SOFR, US Treasury CMT, FX; date-aware with local store
+│   └── external_store.py  # ExternalStore — yfinance, FF factors, GPR
+├── instruments/
+│   ├── base.py         # Instrument ABC
+│   ├── bond.py         # Bond — OIS discounting, z-spread, key rate DV01
+│   ├── cds.py          # CDS — hazard rate, credit triangle, ISDA standards
+│   ├── swap.py         # IRSwap — multi-curve, par rate, MTM, DV01
+│   ├── fx_forward.py   # FXForward — CIP, NPV, delta FX/IR
+│   └── option.py       # VanillaOption — BSM, implied vol, greeks
+├── models/
+│   ├── rates.py        # VasicekProcess, HullWhiteProcess, CIRProcess
+│   ├── equity.py       # GBMProcess, LocalVolProcess
+│   └── simulator.py    # MCSimulator — paths, antithetic, exposure profiles, SDF
+└── risk/
+    └── xva.py          # XVAEngine, Trade — CVA/DVA/FVA/MVA under netting set
 ```
 
 **Design principles:** abstract base classes, dependency injection, no global state,
-QuantLib global clock managed explicitly.
+QuantLib global clock managed via context manager.
 
-**Tests:** 184+ tests, all passing.
+**Tests:** 268 passing, 1 skipped — no live API calls.
 
 ---
 
@@ -220,5 +214,4 @@ jupyter lab
 ---
 
 *Regulation references: CRR3 (EU 2024/1623), EBA/GL/2022/14, EBA/RTS/2022/09,*
-*EBA/RTS/2022/10, BCBS d457, EMIR (EU 648/2012), Directive 2011/61/EU,*
-*Delegated Regulation 231/2013, Directive 2024/927/EU, ESMA34-671404336-1364.*
+*EBA/RTS/2022/10, BCBS d457, EMIR (EU 648/2012), IFRS 13.*
