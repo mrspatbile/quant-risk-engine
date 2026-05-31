@@ -3,10 +3,10 @@ VanillaOption -- European option pricer via Black-Scholes-Merton.
 
 Uses QuantLib AnalyticEuropeanEngine for pricing and Greeks.
 Implements the Instrument ABC -- price(), dv01(), duration(), cash_flows(),
-key_rate_dv01().
+rate_sensitivities().
 
 Regulatory context:
-    FRTB SA -- delta (equity/FX/GIRR), vega, curvature (CRR3 Article 325)
+    FRTB SA -- delta (equity/FX/GIRR), vega (CRR3 Article 325)
     IFRS 13 -- Level 2 (vanilla with observable vol), Level 3 (exotic)
     EMIR -- OTC options reporting and margining
 """
@@ -285,46 +285,6 @@ class VanillaOption(Instrument):
             return brentq(objective, 0.001, 5.0, xtol=1e-8)
         except ValueError:
             return np.nan
-
-    def frtb_curvature(self, curve: DiscountCurve) -> dict:
-        """
-        FRTB SA curvature risk -- scenario-based gamma capture.
-
-        CVR = -min(V(S+RW) - V - RW*delta, V(S-RW) - V + RW*delta, 0)
-
-        Risk weight for equity: 15%.
-        """
-        rw = 0.15   # equity delta risk weight
-        disc_handle = self._disc_handle_from_curve(curve)
-        r = -np.log(disc_handle.discount(self._expiry_date)) / self._T if self._T > 0 else 0
-
-        V      = self._bsm_price(r) * self._notional_
-        delta_ = self.delta(curve)
-
-        # shocked spot prices
-        S_up   = self._spot * (1 + rw)
-        S_down = self._spot * (1 - rw)
-
-        # reprice at shocked spots
-        orig_spot    = self._spot
-        self._spot   = S_up
-        V_up         = self._bsm_price(r) * self._notional_
-        self._spot   = S_down
-        V_down       = self._bsm_price(r) * self._notional_
-        self._spot   = orig_spot   # restore
-
-        cvr_up   = V_up   - V - rw * orig_spot * delta_
-        cvr_down = V_down - V + rw * orig_spot * delta_
-        cvr      = -min(cvr_up, cvr_down, 0)
-
-        return {
-            'V':        V,
-            'V_up':     V_up,
-            'V_down':   V_down,
-            'cvr_up':   cvr_up,
-            'cvr_down': cvr_down,
-            'cvr':      cvr,
-        }
 
     def greeks_summary(self, curve: DiscountCurve) -> dict:
         """All Greeks in one call."""

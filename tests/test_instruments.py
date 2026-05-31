@@ -813,20 +813,6 @@ class TestVanillaOption:
         iv           = call_option.implied_vol(market_price, r=r)
         assert abs(iv - call_option._sigma) < 0.0001
 
-    # ── FRTB curvature ────────────────────────────────────────────────────────
-
-    def test_frtb_curvature_keys(self, call_option, curve):
-        cvr = call_option.frtb_curvature(curve)
-        assert all(k in cvr for k in ['V', 'V_up', 'V_down', 'cvr_up', 'cvr_down', 'cvr'])
-
-    def test_frtb_cvr_non_negative(self, call_option, curve):
-        # CVR is always >= 0 for long options (positive gamma)
-        assert call_option.frtb_curvature(curve)['cvr'] >= 0
-
-    def test_frtb_v_up_above_v_down_for_call(self, call_option, curve):
-        cvr = call_option.frtb_curvature(curve)
-        assert cvr['V_up'] > cvr['V_down']
-
     # ── cash flows ────────────────────────────────────────────────────────────
 
     def test_cash_flows_columns(self, call_option):
