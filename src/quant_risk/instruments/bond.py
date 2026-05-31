@@ -62,7 +62,7 @@ class Bond(Instrument):
     ... )
     >>> bond.price(curve)
     >>> bond.dv01(curve)
-    >>> bond.key_rate_dv01(curve)
+    >>> bond.rate_sensitivities(curve, tenors=[0.25, 0.5, 1, 2, 5, 10])
     """
 
     _calendar         = ql.TARGET()
@@ -176,12 +176,12 @@ class Bond(Instrument):
                 })
         return pd.DataFrame(records)
 
-    def key_rate_dv01(
+    def rate_sensitivities(
         self,
         curve  : DiscountCurve,
-        tenors : list,
+        tenors : list[float],
         bump   : float = 0.0001,
-    ) -> dict:
+    ) -> dict[float, float]:
         """
         Key rate DV01 at caller-specified tenor vertices.
 
@@ -189,14 +189,15 @@ class Bond(Instrument):
         ----------
         curve : DiscountCurve
             Baseline OIS curve.
-        tenors : list
-            Vertex maturities in years, e.g. [0.25, 0.5, 1, 2, 5, 10].
+        tenors : list[float]
+            Vertex maturities in years, e.g. [0.25, 0.5, 1.0, 2.0, 5.0, 10.0].
         bump : float
             Rate bump in decimal. Default 0.0001 (1bp).
 
         Returns
         -------
-        dict {tenor_label: dv01_eur}
+        dict[float, float]
+            {tenor_years: dv01_eur} in currency units per 1bp.
         """
         val_date = self._valuation_date(curve)
 
@@ -209,8 +210,7 @@ class Bond(Instrument):
                 rates_up[i + 1] += bump
                 price_up    = self._price_from_pillars(dates, rates_up)
                 dv01_kr     = (base_price - price_up) * self._face_value / 100
-                label       = f"{int(tenor*12)}M" if tenor < 1 else f"{int(tenor)}Y"
-                result[label] = round(dv01_kr, 2)
+                result[tenor] = round(dv01_kr, 2)
             return result
 
         return self._with_eval_date(val_date, _impl)

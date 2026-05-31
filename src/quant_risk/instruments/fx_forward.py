@@ -248,27 +248,36 @@ class FXForward(Instrument):
             'type':   'settlement',
         }])
 
-    def key_rate_dv01(
+    def rate_sensitivities(
         self,
         curve: DiscountCurve,
-        tenors: list,
+        tenors: list[float],
         bump: float = 0.0001,
-    ) -> dict:
+    ) -> dict[float, float]:
         """
         IR sensitivity assigned to the nearest of the caller-supplied vertices.
 
         FX forward IR sensitivity concentrates at the maturity tenor.
-        All key rate DV01s are zero except at the nearest bucket.
+        All sensitivities are zero except at the nearest bucket.
 
         Parameters
         ----------
-        tenors : list
-            Vertex maturities in years, e.g. [0.25, 0.5, 1, 2, 5, 10].
+        curve : DiscountCurve
+            Baseline EUR OIS curve.
+        tenors : list[float]
+            Vertex maturities in years, e.g. [0.25, 0.5, 1.0, 2.0, 5.0, 10.0].
+        bump : float
+            Rate bump in decimal. Default 0.0001 (1bp).
+
+        Returns
+        -------
+        dict[float, float]
+            {tenor_years: sensitivity} in currency units per 1bp.
         """
         ir_dv01     = self.dv01(curve, bump)
         nearest_idx = min(range(len(tenors)), key=lambda i: abs(tenors[i] - self._T))
         return {
-            (f"{int(t*12)}M" if t < 1 else f"{int(t)}Y"): (ir_dv01 if i == nearest_idx else 0.0)
+            t: (ir_dv01 if i == nearest_idx else 0.0)
             for i, t in enumerate(tenors)
         }
 

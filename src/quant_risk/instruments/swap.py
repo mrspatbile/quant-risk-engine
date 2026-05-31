@@ -202,16 +202,29 @@ class IRSwap(Instrument):
             })
         return pd.DataFrame(records).sort_values("date").reset_index(drop=True)
 
-    def key_rate_dv01(
+    def rate_sensitivities(
         self,
         curve  : DiscountCurve,
-        tenors : list = None,
+        tenors : list[float],
         bump   : float = 0.0001,
-        ) -> dict:
-        if tenors is None:
-            # use our actual pillar tenors, not FRTB vertices
-            tenors = [0.0, 1/12, 2/12, 3/12, 6/12, 9/12, 1, 2, 3, 5, 10, 15]
+    ) -> dict[float, float]:
+        """
+        Key rate DV01 at caller-specified tenor vertices.
 
+        Parameters
+        ----------
+        curve : DiscountCurve
+            Baseline OIS/EURIBOR curve.
+        tenors : list[float]
+            Vertex maturities in years, e.g. [0.0, 0.5, 1.0, 2.0, 5.0, 10.0].
+        bump : float
+            Rate bump in decimal. Default 0.0001 (1bp).
+
+        Returns
+        -------
+        dict[float, float]
+            {tenor_years: sensitivity} in currency units per 1bp.
+        """
         def _impl():
             dates, ois_rates, euribor_rates = self._pillar_rates(curve)
             npv_base = self._npv_from_pillars(dates, ois_rates, euribor_rates, curve)
@@ -224,10 +237,7 @@ class IRSwap(Instrument):
                 ois_up[i] += bump
                 eur_up[i] += bump
                 npv_up     = self._npv_from_pillars(dates, ois_up, eur_up, curve)
-                label      = "ON" if tenor == 0.0 else (
-                    f"{int(tenor*12)}M" if tenor < 1 else f"{int(tenor)}Y"
-                )
-                result[label] = round(npv_base - npv_up, 2)
+                result[tenor] = round(npv_base - npv_up, 2)
             return result
 
         return self._with_eval_date(self._ql_valuation_date, _impl)

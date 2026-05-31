@@ -172,10 +172,10 @@ class TestIRSwap:
         )
         assert receiver.dv01(curve) > 0
 
-    def test_key_rate_dv01_5y_dominates(self, swap, curve):
+    def test_rate_sensitivities_5y_dominates(self, swap, curve):
         tenors = [0.0, 1/12, 2/12, 3/12, 6/12, 9/12, 1, 2, 3, 5, 10, 15]
-        kr = swap.key_rate_dv01(curve, tenors=tenors)
-        assert abs(kr["5Y"]) == max(abs(v) for v in kr.values())
+        kr = swap.rate_sensitivities(curve, tenors)
+        assert abs(kr[5.0]) == max(abs(v) for v in kr.values())
 
 
 class TestIRSwapValidation:
@@ -305,7 +305,8 @@ class TestCreditDefaultSwap:
 
     def test_cs01_positive_for_buyer(self, cds_flat, curve):
         # protection buyer gains when spreads widen
-        assert cds_flat.cs01(curve) > 0
+        result = cds_flat.cs01(curve, tenors=[5.0])
+        assert result[5.0] > 0
 
     def test_cs01_negative_for_seller(self, valuation_date, maturity, curve):
         cds_seller = CreditDefaultSwap.from_flat_spread(
@@ -316,11 +317,13 @@ class TestCreditDefaultSwap:
             coupon           = 0.0100,
             protection_buyer = False,
         )
-        assert cds_seller.cs01(curve) < 0
+        result = cds_seller.cs01(curve, tenors=[5.0])
+        assert result[5.0] < 0
 
     def test_ir_pv01_small_relative_to_cs01(self, cds_flat, curve):
         # IR PV01 should be much smaller than CS01 for CDS
-        assert abs(cds_flat.dv01(curve)) < abs(cds_flat.cs01(curve))
+        cs01_result = cds_flat.cs01(curve, tenors=[5.0])
+        assert abs(cds_flat.dv01(curve)) < abs(cs01_result[5.0])
 
     def test_duration_positive(self, cds_flat, curve):
         # risky annuity always positive
@@ -377,7 +380,8 @@ class TestCreditDefaultSwap:
         assert np.isfinite(cds_bootstrapped.price(curve))
 
     def test_bootstrapped_cs01_positive_for_buyer(self, cds_bootstrapped, curve):
-        assert cds_bootstrapped.cs01(curve) > 0
+        result = cds_bootstrapped.cs01(curve, tenors=[5.0])
+        assert result[5.0] > 0
 
     def test_bootstrapped_par_spread_at_5y(self, cds_bootstrapped, curve):
         # 5Y market spread is 150bps -- par spread should be close
@@ -884,13 +888,13 @@ class TestEvalDateIsolation:
         bond.dv01(curve)
         assert ql.Settings.instance().evaluationDate == prev
 
-    def test_eval_date_restored_after_bond_key_rate_dv01(self, curve):
+    def test_eval_date_restored_after_bond_rate_sensitivities(self, curve):
         bond = Bond(
             isin="ISO003", face_value=1_000_000, coupon_rate=0.025,
             issue_date="2023-01-01", maturity_date="2028-01-01",
         )
         prev = ql.Settings.instance().evaluationDate
-        bond.key_rate_dv01(curve, tenors=[1, 2, 5, 10])
+        bond.rate_sensitivities(curve, [1, 2, 5, 10])
         assert ql.Settings.instance().evaluationDate == prev
 
     def test_eval_date_restored_after_swap_price(self, curve):

@@ -349,83 +349,101 @@ class CreditDefaultSwap(Instrument):
             })
         return pd.DataFrame(records)
 
-    def key_rate_dv01(
+    def rate_sensitivities(
         self,
         curve: DiscountCurve,
-        tenors: list,
+        tenors: list[float],
         bump: float = 0.0001,
-    ) -> dict:
+    ) -> dict[float, float]:
         """
         CS01 at caller-specified tenor vertices.
 
-        Bumps the credit spread curve in parallel by 1bp and measures the
-        NPV change. The caller supplies the vertex list.
+        For each tenor, prices a CDS maturing at that tenor and measures
+        its sensitivity to a 1bp parallel hazard rate bump. The caller
+        supplies the vertex list.
 
         Parameters
         ----------
-        tenors : list
-            Vertex maturities in years, e.g. [0.5, 1, 2, 3, 5, 10].
+        curve : DiscountCurve
+            OIS discount curve.
+        tenors : list[float]
+            Vertex maturities in years, e.g. [0.5, 1.0, 2.0, 3.0, 5.0, 10.0].
+        bump : float
+            Spread bump in decimal. Default 0.0001 (1bp).
 
-        Note: bumps the full hazard curve by 1bp equivalent
-        (bump / (1-R) in hazard rate space) -- a parallel CS01.
-        For vertex-by-vertex bucketed CS01 a term structure bump is needed.
+        Returns
+        -------
+        dict[float, float]
+            {tenor_years: cs01} in currency units per 1bp.
         """
         disc_handle = self._disc_handle_from_curve(curve)
-
-        # parallel 1bp hazard bump
-        hazard_bump  = bump / (1 - self._recovery)
+        hazard_bump = bump / (1 - self._recovery)
 
         result = {}
         for t in tenors:
-            label = f"{int(t*12)}M" if t < 1 else f"{int(t)}Y"
             mat = _imm_maturity(self._valuation_date, t)
-            cds_up = self._build_cds_with_hazard(
-                self._hazard_handle, disc_handle, maturity=mat
-            )
-            # apply 1bp parallel spread bump via hazard rate shift
             h_up_val = self._hazard_handle.currentLink().hazardRate(
-                self._valuation_date + ql.Period(int(t*365), ql.Days)
+                self._valuation_date + ql.Period(max(1, int(t * 365)), ql.Days)
             ) + hazard_bump
             hc_up = ql.FlatHazardRate(
                 self._valuation_date,
                 ql.QuoteHandle(ql.SimpleQuote(h_up_val)),
                 ql.Actual365Fixed()
             )
-            hh_up    = ql.DefaultProbabilityTermStructureHandle(hc_up)
-            npv_up   = self._build_cds_with_hazard(
-                hh_up, disc_handle, maturity=mat
-            ).NPV()
-            npv_base_t = self._build_cds_with_hazard(
-                self._hazard_handle, disc_handle, maturity=mat
-            ).NPV()
-            result[label] = npv_up - npv_base_t
+            hh_up      = ql.DefaultProbabilityTermStructureHandle(hc_up)
+            npv_up     = self._build_cds_with_hazard(hh_up, disc_handle, maturity=mat).NPV()
+            npv_base_t = self._build_cds_with_hazard(self._hazard_handle, disc_handle, maturity=mat).NPV()
+            result[t]  = npv_up - npv_base_t
 
         return result
 
     # ── CDS-specific methods (beyond ABC) ────────────────────────────────────
 
-    def cs01(self, curve: DiscountCurve, bump: float = 0.0001) -> float:
-        """CS01 -- change in NPV for 1bp parallel shift in credit spread."""
+    def cs01(
+        self,
+        curve: DiscountCurve,
+        tenors: list[float],
+        bump: float = 0.0001,
+    ) -> dict[float, float]:
+        """
+        CS01 at each caller-specified tenor vertex.
+
+        For each tenor t, samples the hazard rate at that point, applies a
+        1bp flat bump, and measures the NPV change of this CDS. The caller
+        supplies the vertex list.
+
+        Parameters
+        ----------
+        curve : DiscountCurve
+            OIS discount curve.
+        tenors : list[float]
+            Credit spread tenor vertices in years, e.g. [1.0, 3.0, 5.0].
+        bump : float
+            Spread bump in decimal. Default 0.0001 (1bp).
+
+        Returns
+        -------
+        dict[float, float]
+            {tenor_years: cs01} in currency units per 1bp.
+        """
         disc_handle = self._disc_handle_from_curve(curve)
         npv_base    = self._reprice(disc_handle).NPV()
+        hazard_bump = bump / (1 - self._recovery)
 
-        # get current hazard rate at mid-maturity as representative level
-        mid = self._valuation_date + ql.Period(
-            int(ql.Actual365Fixed().yearFraction(
-                self._valuation_date, self._maturity
-            ) * 365 / 2), ql.Days
-        )
-        h_mid    = self._hazard_handle.currentLink().hazardRate(mid)
-        h_bumped = h_mid + bump / (1 - self._recovery)
-
-        hc_up = ql.FlatHazardRate(
-            self._valuation_date,
-            ql.QuoteHandle(ql.SimpleQuote(h_bumped)),
-            ql.Actual365Fixed()
-        )
-        hh_up  = ql.DefaultProbabilityTermStructureHandle(hc_up)
-        npv_up = self._build_cds_with_hazard(hh_up, disc_handle).NPV()
-        return npv_up - npv_base
+        result = {}
+        for t in tenors:
+            tenor_date = self._valuation_date + ql.Period(max(1, int(t * 365)), ql.Days)
+            h_val    = self._hazard_handle.currentLink().hazardRate(tenor_date)
+            h_bumped = h_val + hazard_bump
+            hc_up = ql.FlatHazardRate(
+                self._valuation_date,
+                ql.QuoteHandle(ql.SimpleQuote(h_bumped)),
+                ql.Actual365Fixed()
+            )
+            hh_up  = ql.DefaultProbabilityTermStructureHandle(hc_up)
+            npv_up = self._build_cds_with_hazard(hh_up, disc_handle).NPV()
+            result[t] = npv_up - npv_base
+        return result
 
     def par_spread(self, curve: DiscountCurve) -> float:
         """Current par spread -- the coupon that makes NPV zero."""
