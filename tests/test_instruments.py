@@ -1668,6 +1668,145 @@ class TestBestOfOption:
 
 
 # ------------------------------------------------------------------
+# TotalReturnSwap tests (QRE-124)
+# ------------------------------------------------------------------
+
+from quant_risk.instruments.trs import TotalReturnSwap
+
+
+class TestTotalReturnSwap:
+
+    @pytest.fixture
+    def trs_at_inception(self):
+        # Spot current = spot inception → NPV ≈ 0 with zero spread
+        return TotalReturnSwap(
+            notional_          = 10_000_000,
+            spot_inception     = 100.0,
+            spot_current       = 100.0,
+            valuation_date     = "2026-03-24",
+            maturity_date      = "2028-03-24",
+            funding_spread_bps = 0.0,
+            div_yield          = 0.0,
+            long_asset         = True,
+            payment_freq       = 4,
+        )
+
+    @pytest.fixture
+    def trs_itm(self):
+        # Asset appreciated from 100 to 110 → positive NPV for asset receiver
+        return TotalReturnSwap(
+            notional_          = 10_000_000,
+            spot_inception     = 100.0,
+            spot_current       = 110.0,
+            valuation_date     = "2026-03-24",
+            maturity_date      = "2028-03-24",
+            funding_spread_bps = 0.0,
+            long_asset         = True,
+        )
+
+    @pytest.fixture
+    def trs_otm(self):
+        # Asset fell from 100 to 90 → negative NPV for asset receiver
+        return TotalReturnSwap(
+            notional_          = 10_000_000,
+            spot_inception     = 100.0,
+            spot_current       = 90.0,
+            valuation_date     = "2026-03-24",
+            maturity_date      = "2028-03-24",
+            funding_spread_bps = 0.0,
+            long_asset         = True,
+        )
+
+    # ── construction ─────────────────────────────────────────────────────────
+
+    def test_currency_default(self, trs_at_inception):
+        assert trs_at_inception.currency == 'EUR'
+
+    def test_notional(self, trs_at_inception):
+        assert trs_at_inception.notional == 10_000_000
+
+    def test_describe_contains_receiver(self, trs_at_inception):
+        assert 'Asset Receiver' in trs_at_inception.describe()
+
+    def test_payer_describe(self):
+        trs = TotalReturnSwap(1_000_000, 100.0, 100.0,
+                              "2026-03-24", "2027-03-24", 0.0, long_asset=False)
+        assert 'Asset Payer' in trs.describe()
+
+    # ── pricing at inception ──────────────────────────────────────────────────
+
+    def test_price_returns_dict(self, trs_at_inception, curve):
+        result = trs_at_inception.price(curve)
+        assert {'return_leg_npv', 'funding_leg_npv', 'npv'}.issubset(result)
+
+    def test_npv_near_zero_at_inception_zero_spread(self, trs_at_inception, curve):
+        # At inception with zero spread and q=0: return leg ≈ funding leg
+        result = trs_at_inception.price(curve)
+        # Both legs are small relative to notional; net NPV should be small
+        assert abs(result['npv']) < result['return_leg_npv'] * 0.5
+
+    def test_npv_equals_price_npv(self, trs_at_inception, curve):
+        assert trs_at_inception.npv(curve) == trs_at_inception.price(curve)['npv']
+
+    # ── mtm sensitivity ───────────────────────────────────────────────────────
+
+    def test_npv_positive_when_asset_appreciated(self, trs_itm, curve):
+        assert trs_itm.npv(curve) > 0
+
+    def test_npv_negative_when_asset_fell(self, trs_otm, curve):
+        assert trs_otm.npv(curve) < 0
+
+    def test_long_short_opposite_npv(self, curve):
+        trs_long  = TotalReturnSwap(1_000_000, 100.0, 110.0, "2026-03-24", "2028-03-24", 0.0, long_asset=True)
+        trs_short = TotalReturnSwap(1_000_000, 100.0, 110.0, "2026-03-24", "2028-03-24", 0.0, long_asset=False)
+        assert abs(trs_long.npv(curve) + trs_short.npv(curve)) < 1e-6
+
+    def test_higher_spread_reduces_npv_for_receiver(self, curve):
+        trs_0   = TotalReturnSwap(1_000_000, 100.0, 100.0, "2026-03-24", "2028-03-24", 0.0)
+        trs_100 = TotalReturnSwap(1_000_000, 100.0, 100.0, "2026-03-24", "2028-03-24", 100.0)
+        assert trs_100.npv(curve) < trs_0.npv(curve)
+
+    def test_div_yield_reduces_return_leg(self, curve):
+        trs_no_div  = TotalReturnSwap(1_000_000, 100.0, 100.0, "2026-03-24", "2028-03-24", 0.0, div_yield=0.0)
+        trs_with_div = TotalReturnSwap(1_000_000, 100.0, 100.0, "2026-03-24", "2028-03-24", 0.0, div_yield=0.03)
+        # Dividend yield reduces the forward price → lower return leg NPV
+        assert trs_with_div.price(curve)['return_leg_npv'] < trs_no_div.price(curve)['return_leg_npv']
+
+    # ── sensitivities ─────────────────────────────────────────────────────────
+
+    def test_dv01_is_float(self, trs_at_inception, curve):
+        assert isinstance(trs_at_inception.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, trs_at_inception, curve):
+        result = trs_at_inception.rate_sensitivities(curve, [0.5, 1.0, 2.0, 5.0])
+        assert set(result.keys()) == {0.5, 1.0, 2.0, 5.0}
+
+    def test_duration_positive(self, trs_at_inception, curve):
+        assert trs_at_inception.duration(curve) > 0
+
+    # ── cash flows ────────────────────────────────────────────────────────────
+
+    def test_cash_flows_returns_dataframe(self, trs_at_inception):
+        cf = trs_at_inception.cash_flows()
+        assert isinstance(cf, pd.DataFrame)
+        assert 'date' in cf.columns and 'amount' in cf.columns
+
+    def test_cash_flows_has_return_leg_row(self, trs_at_inception):
+        cf = trs_at_inception.cash_flows()
+        assert any('return leg' in str(t) for t in cf['type'])
+
+    # ── validation ────────────────────────────────────────────────────────────
+
+    def test_maturity_before_valuation_raises(self):
+        with pytest.raises(ValueError):
+            TotalReturnSwap(1_000_000, 100.0, 100.0, "2026-03-24", "2025-01-01", 0.0)
+
+    def test_invalid_payment_freq_raises(self):
+        with pytest.raises(ValueError):
+            TotalReturnSwap(1_000_000, 100.0, 100.0, "2026-03-24", "2028-03-24", 0.0, payment_freq=3)
+
+
+# ------------------------------------------------------------------
 # Global QuantLib clock isolation tests (QRE-88 / QRE-89)
 # ------------------------------------------------------------------
 

@@ -25,6 +25,7 @@ from quant_risk.instruments.path_dependent import (
     Decumulator,
 )
 from quant_risk.instruments.multi_asset import WorstOfOption, BestOfOption
+from quant_risk.instruments.trs import TotalReturnSwap
 
 __all__ = [
     "Bond",
@@ -49,4 +50,5 @@ __all__ = [
     "Decumulator",
     "WorstOfOption",
     "BestOfOption",
+    "TotalReturnSwap",
 ]

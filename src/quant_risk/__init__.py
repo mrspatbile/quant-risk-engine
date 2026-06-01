@@ -21,6 +21,7 @@ from quant_risk.instruments import (
     Decumulator,
     WorstOfOption,
     BestOfOption,
+    TotalReturnSwap,
 )
 from quant_risk.curves import OISCurve, NSSCurve, ArrayCurve
 from quant_risk.models import (
@@ -59,6 +60,7 @@ __all__ = [
     "Decumulator",
     "WorstOfOption",
     "BestOfOption",
+    "TotalReturnSwap",
     # curves
     "OISCurve",
     "NSSCurve",
