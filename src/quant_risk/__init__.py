@@ -12,6 +12,13 @@ from quant_risk.instruments import (
     BarrierOption,
     ChooserOption,
     CompoundOption,
+    AsianOption,
+    LookbackOption,
+    CliquetOption,
+    ShoutOption,
+    NapoleonOption,
+    Accumulator,
+    Decumulator,
 )
 from quant_risk.curves import OISCurve, NSSCurve, ArrayCurve
 from quant_risk.models import (
@@ -40,6 +47,13 @@ __all__ = [
     "BarrierOption",
     "ChooserOption",
     "CompoundOption",
+    "AsianOption",
+    "LookbackOption",
+    "CliquetOption",
+    "ShoutOption",
+    "NapoleonOption",
+    "Accumulator",
+    "Decumulator",
     # curves
     "OISCurve",
     "NSSCurve",

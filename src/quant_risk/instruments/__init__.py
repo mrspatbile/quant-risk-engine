@@ -15,6 +15,15 @@ from quant_risk.instruments.exotic_options import (
     ChooserOption,
     CompoundOption,
 )
+from quant_risk.instruments.path_dependent import (
+    AsianOption,
+    LookbackOption,
+    CliquetOption,
+    ShoutOption,
+    NapoleonOption,
+    Accumulator,
+    Decumulator,
+)
 
 __all__ = [
     "Bond",
@@ -30,4 +39,11 @@ __all__ = [
     "BarrierOption",
     "ChooserOption",
     "CompoundOption",
+    "AsianOption",
+    "LookbackOption",
+    "CliquetOption",
+    "ShoutOption",
+    "NapoleonOption",
+    "Accumulator",
+    "Decumulator",
 ]

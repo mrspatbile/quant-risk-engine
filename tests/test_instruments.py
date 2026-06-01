@@ -1244,6 +1244,295 @@ class TestCompoundOption:
 
 
 # ------------------------------------------------------------------
+# Path-dependent exotic options tests (QRE-122)
+# ------------------------------------------------------------------
+
+from quant_risk.instruments.path_dependent import (
+    AsianOption, LookbackOption, CliquetOption,
+    ShoutOption, NapoleonOption, Accumulator, Decumulator,
+)
+
+# Small paths/steps for test speed; fixed seed for determinism
+_MC_PATHS = 500
+_MC_STEPS = 50
+
+
+class TestAsianOption:
+
+    @pytest.fixture
+    def asian_arith(self, ex_val_date, ex_expiry):
+        return AsianOption(
+            spot=100.0, strike=100.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, average_type='arithmetic', strike_type='fixed',
+            notional_=1_000_000, n_paths=_MC_PATHS, seed=42,
+        )
+
+    @pytest.fixture
+    def asian_geom(self, ex_val_date, ex_expiry):
+        return AsianOption(
+            spot=100.0, strike=100.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, average_type='geometric', strike_type='fixed',
+            notional_=1_000_000,
+        )
+
+    @pytest.fixture
+    def asian_float(self, ex_val_date, ex_expiry):
+        return AsianOption(
+            spot=100.0, strike=100.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, average_type='arithmetic', strike_type='floating',
+            notional_=1_000_000, n_paths=_MC_PATHS, seed=42,
+        )
+
+    def test_npv_positive(self, asian_arith, curve):
+        assert asian_arith.npv(curve) > 0
+
+    def test_npv_equals_price(self, asian_arith, curve):
+        assert asian_arith.npv(curve) == asian_arith.price(curve)
+
+    def test_geometric_below_arithmetic(self, asian_arith, asian_geom, curve):
+        # geometric average <= arithmetic average → geometric Asian <= arithmetic Asian
+        assert asian_geom.npv(curve) <= asian_arith.npv(curve) * 1.05
+
+    def test_floating_strike_positive(self, asian_float, curve):
+        assert asian_float.npv(curve) > 0
+
+    def test_asian_below_vanilla(self, asian_arith, ex_val_date, ex_expiry, curve):
+        from quant_risk.instruments.option import VanillaOption
+        vanilla = VanillaOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20, notional_=1_000_000)
+        assert asian_arith.npv(curve) <= vanilla.npv(curve) * 1.05
+
+    def test_dv01_is_float(self, asian_arith, curve):
+        assert isinstance(asian_arith.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, asian_arith, curve):
+        assert set(asian_arith.rate_sensitivities(curve, [0.5, 1.0, 2.0])) == {0.5, 1.0, 2.0}
+
+    def test_invalid_average_type_raises(self, ex_val_date, ex_expiry):
+        with pytest.raises(ValueError):
+            AsianOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20, average_type='median')
+
+
+class TestLookbackOption:
+
+    @pytest.fixture
+    def lb_fixed(self, ex_val_date, ex_expiry):
+        return LookbackOption(
+            spot=100.0, strike=100.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, strike_type='fixed', option_type='call',
+            notional_=1_000_000,
+        )
+
+    @pytest.fixture
+    def lb_float(self, ex_val_date, ex_expiry):
+        return LookbackOption(
+            spot=100.0, strike=None,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, strike_type='floating', option_type='call',
+            notional_=1_000_000,
+        )
+
+    def test_npv_positive(self, lb_fixed, curve):
+        assert lb_fixed.npv(curve) > 0
+
+    def test_npv_equals_price(self, lb_fixed, curve):
+        assert lb_fixed.npv(curve) == lb_fixed.price(curve)
+
+    def test_lookback_above_vanilla(self, lb_fixed, ex_val_date, ex_expiry, curve):
+        # lookback >= vanilla (buys at min, so always better)
+        from quant_risk.instruments.option import VanillaOption
+        vanilla = VanillaOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20, notional_=1_000_000)
+        assert lb_fixed.npv(curve) >= vanilla.npv(curve) * 0.95
+
+    def test_floating_strike_positive(self, lb_float, curve):
+        assert lb_float.npv(curve) > 0
+
+    def test_dv01_is_float(self, lb_fixed, curve):
+        assert isinstance(lb_fixed.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, lb_fixed, curve):
+        assert set(lb_fixed.rate_sensitivities(curve, [0.5, 1.0, 2.0])) == {0.5, 1.0, 2.0}
+
+    def test_fixed_strike_requires_strike(self, ex_val_date, ex_expiry):
+        with pytest.raises(ValueError):
+            LookbackOption(100.0, None, ex_expiry, ex_val_date, 0.20, strike_type='fixed')
+
+
+class TestCliquetOption:
+
+    @pytest.fixture
+    def cliquet(self, ex_val_date, ex_expiry):
+        reset_dates = [ex_val_date + ql.Period(i, ql.Months) for i in range(1, 12)]
+        return CliquetOption(
+            spot=100.0, reset_dates=reset_dates,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, notional_=1_000_000,
+        )
+
+    def test_npv_positive(self, cliquet, curve):
+        assert cliquet.npv(curve) > 0
+
+    def test_npv_equals_price(self, cliquet, curve):
+        assert cliquet.npv(curve) == cliquet.price(curve)
+
+    def test_dv01_is_float(self, cliquet, curve):
+        assert isinstance(cliquet.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, cliquet, curve):
+        assert set(cliquet.rate_sensitivities(curve, [0.5, 1.0, 2.0])) == {0.5, 1.0, 2.0}
+
+    def test_reset_at_or_after_expiry_raises(self, ex_val_date, ex_expiry):
+        bad_dates = [ex_val_date + ql.Period(i, ql.Months) for i in range(1, 13)]
+        with pytest.raises(ValueError):
+            CliquetOption(100.0, bad_dates, ex_expiry, ex_val_date, 0.20)
+
+    def test_describe_contains_periods(self, cliquet):
+        assert 'Periods' in cliquet.describe()
+
+
+class TestShoutOption:
+
+    @pytest.fixture
+    def shout(self, ex_val_date, ex_expiry):
+        return ShoutOption(
+            spot=100.0, strike=100.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, notional_=1_000_000,
+            n_paths=_MC_PATHS, n_steps=_MC_STEPS, seed=0,
+        )
+
+    def test_npv_positive(self, shout, curve):
+        assert shout.npv(curve) > 0
+
+    def test_npv_equals_price(self, shout, curve):
+        assert shout.npv(curve) == shout.price(curve)
+
+    def test_shout_above_vanilla(self, shout, ex_val_date, ex_expiry, curve):
+        # shout option >= vanilla (holder can lock in gains)
+        from quant_risk.instruments.option import VanillaOption
+        vanilla = VanillaOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20, notional_=1_000_000)
+        assert shout.npv(curve) >= vanilla.npv(curve) * 0.80
+
+    def test_dv01_is_float(self, shout, curve):
+        assert isinstance(shout.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, shout, curve):
+        assert set(shout.rate_sensitivities(curve, [0.5, 1.0, 2.0])) == {0.5, 1.0, 2.0}
+
+
+class TestNapoleonOption:
+
+    @pytest.fixture
+    def napoleon(self, ex_val_date, ex_expiry):
+        obs_dates = [ex_val_date + ql.Period(i, ql.Months) for i in range(1, 13)]
+        return NapoleonOption(
+            spot=100.0, observation_dates=obs_dates,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, notional_=1_000_000,
+            n_paths=_MC_PATHS, seed=0,
+        )
+
+    def test_npv_non_negative(self, napoleon, curve):
+        assert napoleon.npv(curve) >= 0
+
+    def test_npv_equals_price(self, napoleon, curve):
+        assert napoleon.npv(curve) == napoleon.price(curve)
+
+    def test_dv01_is_float(self, napoleon, curve):
+        assert isinstance(napoleon.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, napoleon, curve):
+        assert set(napoleon.rate_sensitivities(curve, [0.5, 1.0, 2.0])) == {0.5, 1.0, 2.0}
+
+    def test_describe_contains_periods(self, napoleon):
+        assert 'Periods' in napoleon.describe()
+
+
+class TestAccumulator:
+
+    @pytest.fixture
+    def accum(self, ex_val_date, ex_expiry):
+        obs_dates = [ex_val_date + ql.Period(i, ql.Months) for i in range(1, 13)]
+        return Accumulator(
+            spot=100.0, forward_price=95.0, barrier=120.0,
+            observation_dates=obs_dates,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, shares_per_period=100.0, notional_=1.0,
+            n_paths=_MC_PATHS, n_steps=_MC_STEPS, seed=0,
+        )
+
+    def test_npv_is_float(self, accum, curve):
+        assert isinstance(accum.npv(curve), float)
+
+    def test_npv_equals_price(self, accum, curve):
+        assert accum.npv(curve) == accum.price(curve)
+
+    def test_positive_npv_when_deeply_itm(self, ex_val_date, ex_expiry, curve):
+        # forward_price much below spot → positive NPV for accumulator
+        obs_dates = [ex_val_date + ql.Period(i, ql.Months) for i in range(1, 13)]
+        accum_itm = Accumulator(
+            spot=100.0, forward_price=70.0, barrier=200.0,
+            observation_dates=obs_dates,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, shares_per_period=1.0,
+            n_paths=_MC_PATHS, n_steps=_MC_STEPS, seed=0,
+        )
+        assert accum_itm.npv(curve) > 0
+
+    def test_barrier_below_spot_raises(self, ex_val_date, ex_expiry):
+        obs = [ex_val_date + ql.Period(1, ql.Months)]
+        with pytest.raises(ValueError):
+            Accumulator(100.0, 95.0, barrier=80.0, observation_dates=obs,
+                        expiry_date=ex_expiry, valuation_date=ex_val_date, sigma=0.20)
+
+    def test_rate_sensitivities_keys(self, accum, curve):
+        assert set(accum.rate_sensitivities(curve, [0.5, 1.0, 2.0])) == {0.5, 1.0, 2.0}
+
+
+class TestDecumulator:
+
+    @pytest.fixture
+    def decum(self, ex_val_date, ex_expiry):
+        obs_dates = [ex_val_date + ql.Period(i, ql.Months) for i in range(1, 13)]
+        return Decumulator(
+            spot=100.0, forward_price=105.0, barrier=80.0,
+            observation_dates=obs_dates,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, shares_per_period=100.0, notional_=1.0,
+            n_paths=_MC_PATHS, n_steps=_MC_STEPS, seed=0,
+        )
+
+    def test_npv_is_float(self, decum, curve):
+        assert isinstance(decum.npv(curve), float)
+
+    def test_npv_equals_price(self, decum, curve):
+        assert decum.npv(curve) == decum.price(curve)
+
+    def test_positive_npv_when_itm(self, ex_val_date, ex_expiry, curve):
+        obs_dates = [ex_val_date + ql.Period(i, ql.Months) for i in range(1, 13)]
+        decum_itm = Decumulator(
+            spot=100.0, forward_price=130.0, barrier=50.0,
+            observation_dates=obs_dates,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, shares_per_period=1.0,
+            n_paths=_MC_PATHS, n_steps=_MC_STEPS, seed=0,
+        )
+        assert decum_itm.npv(curve) > 0
+
+    def test_barrier_above_spot_raises(self, ex_val_date, ex_expiry):
+        obs = [ex_val_date + ql.Period(1, ql.Months)]
+        with pytest.raises(ValueError):
+            Decumulator(100.0, 105.0, barrier=120.0, observation_dates=obs,
+                        expiry_date=ex_expiry, valuation_date=ex_val_date, sigma=0.20)
+
+    def test_rate_sensitivities_keys(self, decum, curve):
+        assert set(decum.rate_sensitivities(curve, [0.5, 1.0, 2.0])) == {0.5, 1.0, 2.0}
+
+
+# ------------------------------------------------------------------
 # Global QuantLib clock isolation tests (QRE-88 / QRE-89)
 # ------------------------------------------------------------------
 
