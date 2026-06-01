@@ -153,6 +153,35 @@ class ArrayCurve(DiscountCurve):
         p2 = self.discount(T + dT)
         return -(np.log(p2) - np.log(p1)) / (2 * dT)
 
+    def bumped_at(self, tenor: float, amount: float) -> "ArrayCurve":
+        """
+        Return a new ArrayCurve with the zero rate at the nearest vertex
+        shifted by amount. The original curve is unchanged.
+
+        Parameters
+        ----------
+        tenor : float
+            Target maturity in years. The nearest vertex in self._maturities
+            is selected (argmin of |maturities - tenor|).
+        amount : float
+            Shift in decimal (0.0001 = 1bp).
+
+        Returns
+        -------
+        ArrayCurve
+            New curve with the same maturities, interpolation, and reference
+            date, with one vertex rate shifted by amount.
+        """
+        new_rates       = self._zero_rates.copy()
+        idx             = int(np.argmin(np.abs(self._maturities - tenor)))
+        new_rates[idx] += amount
+        return ArrayCurve(
+            self._maturities.copy(),
+            new_rates,
+            interpolation  = self._interpolation,
+            reference_date = self._ref_date,
+        )
+
     # ── Raw QuantLib access ───────────────────────────────────────────────
 
     @property

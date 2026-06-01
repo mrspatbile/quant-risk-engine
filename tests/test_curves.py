@@ -348,3 +348,57 @@ class TestArrayCurveValidation:
     def test_error_message_shows_bad_index(self):
         with pytest.raises(ValueError, match="index 1"):
             ArrayCurve(np.array([1.0, 3.0, 2.0, 5.0]), FLAT_RATES)
+
+
+class TestArrayCurveBumpedAt:
+
+    def test_returns_array_curve(self):
+        c = ArrayCurve(MATURITIES, FLAT_RATES)
+        assert isinstance(c.bumped_at(5.0, 0.0001), ArrayCurve)
+
+    def test_bumped_vertex_rate_shifted(self):
+        c       = ArrayCurve(MATURITIES, FLAT_RATES)
+        bumped  = c.bumped_at(5.0, 0.0001)
+        np.testing.assert_allclose(bumped.zero_rate(5.0), FLAT_RATE + 0.0001, atol=1e-5)
+
+    def test_unbumped_vertices_unchanged(self):
+        c      = ArrayCurve(MATURITIES, FLAT_RATES)
+        bumped = c.bumped_at(5.0, 0.0001)
+        for T in [1.0, 2.0, 10.0]:
+            np.testing.assert_allclose(bumped.zero_rate(T), c.zero_rate(T), atol=1e-8)
+
+    def test_original_curve_not_mutated(self):
+        c      = ArrayCurve(MATURITIES, FLAT_RATES)
+        _      = c.bumped_at(5.0, 0.0001)
+        for T in [1.0, 2.0, 5.0, 10.0]:
+            np.testing.assert_allclose(c.zero_rate(T), FLAT_RATE, atol=1e-4)
+
+    def test_nearest_vertex_selected(self):
+        # tenor 4.8 should snap to the 5.0Y vertex
+        c      = ArrayCurve(MATURITIES, FLAT_RATES)
+        bumped = c.bumped_at(4.8, 0.0010)
+        np.testing.assert_allclose(bumped.zero_rate(5.0), FLAT_RATE + 0.0010, atol=1e-5)
+
+    def test_preserves_interpolation(self):
+        c      = ArrayCurve(MATURITIES, FLAT_RATES, interpolation="linear")
+        bumped = c.bumped_at(2.0, 0.0001)
+        assert bumped._interpolation == "linear"
+
+    def test_preserves_reference_date(self):
+        c      = ArrayCurve(MATURITIES, FLAT_RATES)
+        bumped = c.bumped_at(1.0, 0.0001)
+        assert bumped._ref_date == c._ref_date
+
+    def test_negative_bump_lowers_rate(self):
+        c      = ArrayCurve(MATURITIES, FLAT_RATES)
+        bumped = c.bumped_at(10.0, -0.0050)
+        np.testing.assert_allclose(bumped.zero_rate(10.0), FLAT_RATE - 0.0050, atol=1e-5)
+
+    def test_discount_changes_only_at_bumped_tenor(self):
+        c      = ArrayCurve(MATURITIES, FLAT_RATES)
+        bumped = c.bumped_at(10.0, 0.0100)
+        # 1Y and 2Y discount factors should be unchanged
+        np.testing.assert_allclose(bumped.discount(1.0), c.discount(1.0), atol=1e-8)
+        np.testing.assert_allclose(bumped.discount(2.0), c.discount(2.0), atol=1e-8)
+        # 10Y discount should change
+        assert bumped.discount(10.0) < c.discount(10.0)
