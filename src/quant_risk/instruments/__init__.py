@@ -9,6 +9,12 @@ from quant_risk.instruments.cds import (
     STANDARD_COUPON_HY,
 )
 from quant_risk.instruments.equity_forward import EquityForward
+from quant_risk.instruments.exotic_options import (
+    DigitalOption,
+    BarrierOption,
+    ChooserOption,
+    CompoundOption,
+)
 
 __all__ = [
     "Bond",
@@ -20,4 +26,8 @@ __all__ = [
     "STANDARD_COUPON_IG",
     "STANDARD_COUPON_HY",
     "EquityForward",
+    "DigitalOption",
+    "BarrierOption",
+    "ChooserOption",
+    "CompoundOption",
 ]

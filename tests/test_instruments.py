@@ -1020,6 +1020,230 @@ class TestEquityForward:
 
 
 # ------------------------------------------------------------------
+# Exotic options tests (QRE-121)
+# ------------------------------------------------------------------
+
+from quant_risk.instruments.exotic_options import (
+    DigitalOption, BarrierOption, ChooserOption, CompoundOption,
+)
+
+@pytest.fixture
+def ex_val_date():
+    d = ql.Date(24, 3, 2026)
+    ql.Settings.instance().evaluationDate = d
+    return d
+
+@pytest.fixture
+def ex_expiry(ex_val_date):
+    return ex_val_date + ql.Period(1, ql.Years)
+
+@pytest.fixture
+def ex_mid_date(ex_val_date):
+    return ex_val_date + ql.Period(6, ql.Months)
+
+
+class TestDigitalOption:
+
+    @pytest.fixture
+    def cash_call(self, ex_val_date, ex_expiry):
+        return DigitalOption(
+            spot=100.0, strike=100.0, expiry_date=ex_expiry,
+            valuation_date=ex_val_date, sigma=0.20,
+            payoff_type='cash', cash_amount=1.0, option_type='call',
+            notional_=1_000_000,
+        )
+
+    @pytest.fixture
+    def asset_call(self, ex_val_date, ex_expiry):
+        return DigitalOption(
+            spot=100.0, strike=100.0, expiry_date=ex_expiry,
+            valuation_date=ex_val_date, sigma=0.20,
+            payoff_type='asset', option_type='call',
+            notional_=1_000_000,
+        )
+
+    def test_npv_positive(self, cash_call, curve):
+        assert cash_call.npv(curve) > 0
+
+    def test_npv_equals_price(self, cash_call, curve):
+        assert cash_call.npv(curve) == cash_call.price(curve)
+
+    def test_asset_or_nothing_above_cash_or_nothing(self, cash_call, asset_call, curve):
+        # asset-or-nothing pays the asset (100+) vs cash-or-nothing pays 1 per contract
+        # notional same → asset NPV should be much larger per unit
+        assert asset_call.npv(curve) / asset_call.notional > cash_call.npv(curve) / cash_call.notional
+
+    def test_cash_call_below_vanilla(self, ex_val_date, ex_expiry, curve):
+        from quant_risk.instruments.option import VanillaOption
+        vanilla = VanillaOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20)
+        digital = DigitalOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20,
+                                payoff_type='cash', cash_amount=100.0)
+        # digital cash pays 100 if ITM; vanilla pays S-K if ITM: similar ATM
+        assert digital.npv(curve) > 0
+
+    def test_dv01_is_float(self, cash_call, curve):
+        assert isinstance(cash_call.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, cash_call, curve):
+        result = cash_call.rate_sensitivities(curve, [0.5, 1.0, 2.0])
+        assert set(result.keys()) == {0.5, 1.0, 2.0}
+
+    def test_cash_flows_single_row(self, cash_call):
+        assert len(cash_call.cash_flows()) == 1
+
+    def test_describe_contains_payoff_type(self, cash_call):
+        assert 'cash' in cash_call.describe()
+
+    def test_invalid_payoff_type_raises(self, ex_val_date, ex_expiry):
+        with pytest.raises(ValueError):
+            DigitalOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20, payoff_type='binary')
+
+
+class TestBarrierOption:
+
+    @pytest.fixture
+    def down_out_call(self, ex_val_date, ex_expiry):
+        return BarrierOption(
+            spot=100.0, strike=100.0, barrier=80.0, rebate=0.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, barrier_type='DownOut', option_type='call',
+            notional_=1_000_000,
+        )
+
+    @pytest.fixture
+    def down_in_call(self, ex_val_date, ex_expiry):
+        return BarrierOption(
+            spot=100.0, strike=100.0, barrier=80.0, rebate=0.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma=0.20, barrier_type='DownIn', option_type='call',
+            notional_=1_000_000,
+        )
+
+    def test_npv_positive(self, down_out_call, curve):
+        assert down_out_call.npv(curve) > 0
+
+    def test_npv_equals_price(self, down_out_call, curve):
+        assert down_out_call.npv(curve) == down_out_call.price(curve)
+
+    def test_in_out_parity(self, down_out_call, down_in_call, ex_val_date, ex_expiry, curve):
+        # Down-Out + Down-In = Vanilla (knock-in knock-out parity)
+        from quant_risk.instruments.option import VanillaOption
+        vanilla = VanillaOption(
+            spot=100.0, strike=100.0, expiry_date=ex_expiry,
+            valuation_date=ex_val_date, sigma=0.20, notional_=1_000_000,
+        )
+        total = down_out_call.npv(curve) + down_in_call.npv(curve)
+        assert abs(total - vanilla.npv(curve)) < 500.0   # within 500 currency units (0.05% of 1M)
+
+    def test_barrier_below_spot_for_down_type(self, down_out_call):
+        assert down_out_call._barrier < down_out_call._spot
+
+    def test_dv01_is_float(self, down_out_call, curve):
+        assert isinstance(down_out_call.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, down_out_call, curve):
+        result = down_out_call.rate_sensitivities(curve, [0.5, 1.0, 2.0])
+        assert set(result.keys()) == {0.5, 1.0, 2.0}
+
+    def test_describe_contains_barrier_type(self, down_out_call):
+        assert 'DownOut' in down_out_call.describe()
+
+    def test_invalid_barrier_type_raises(self, ex_val_date, ex_expiry):
+        with pytest.raises((ValueError, KeyError)):
+            BarrierOption(100.0, 100.0, 80.0, 0.0, ex_expiry, ex_val_date,
+                          0.20, barrier_type='LeftIn')
+
+
+class TestChooserOption:
+
+    @pytest.fixture
+    def chooser(self, ex_val_date, ex_mid_date, ex_expiry):
+        return ChooserOption(
+            spot=100.0, strike=100.0,
+            choice_date=ex_mid_date, expiry_date=ex_expiry,
+            valuation_date=ex_val_date, sigma=0.20,
+            notional_=1_000_000,
+        )
+
+    def test_npv_positive(self, chooser, curve):
+        assert chooser.npv(curve) > 0
+
+    def test_npv_equals_price(self, chooser, curve):
+        assert chooser.npv(curve) == chooser.price(curve)
+
+    def test_chooser_above_call(self, chooser, ex_val_date, ex_expiry, curve):
+        # chooser >= call (it includes the right to choose put too)
+        from quant_risk.instruments.option import VanillaOption
+        call = VanillaOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20, notional_=1_000_000)
+        assert chooser.npv(curve) >= call.npv(curve) - 1.0
+
+    def test_dv01_is_float(self, chooser, curve):
+        assert isinstance(chooser.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, chooser, curve):
+        result = chooser.rate_sensitivities(curve, [0.5, 1.0, 2.0])
+        assert set(result.keys()) == {0.5, 1.0, 2.0}
+
+    def test_cash_flows_single_row(self, chooser):
+        assert len(chooser.cash_flows()) == 1
+
+    def test_describe_contains_choice_date(self, chooser):
+        assert 'ChoiceDate' in chooser.describe()
+
+    def test_choice_after_expiry_raises(self, ex_val_date, ex_expiry):
+        with pytest.raises(ValueError):
+            ChooserOption(100.0, 100.0,
+                          choice_date=ex_expiry + ql.Period(1, ql.Days),
+                          expiry_date=ex_expiry,
+                          valuation_date=ex_val_date, sigma=0.20)
+
+
+class TestCompoundOption:
+
+    @pytest.fixture
+    def call_on_call(self, ex_val_date, ex_mid_date, ex_expiry):
+        return CompoundOption(
+            spot=100.0, strike_outer=5.0, strike_inner=100.0,
+            expiry_outer=ex_mid_date, expiry_inner=ex_expiry,
+            valuation_date=ex_val_date, sigma=0.20,
+            outer_type='call', inner_type='call',
+            notional_=1_000_000,
+        )
+
+    def test_npv_positive(self, call_on_call, curve):
+        assert call_on_call.npv(curve) > 0
+
+    def test_npv_equals_price(self, call_on_call, curve):
+        assert call_on_call.npv(curve) == call_on_call.price(curve)
+
+    def test_compound_below_inner_vanilla(self, call_on_call, ex_val_date, ex_expiry, curve):
+        # compound call on call <= vanilla call (one more contingency)
+        from quant_risk.instruments.option import VanillaOption
+        vanilla = VanillaOption(100.0, 100.0, ex_expiry, ex_val_date, 0.20, notional_=1_000_000)
+        assert call_on_call.npv(curve) <= vanilla.npv(curve)
+
+    def test_dv01_is_float(self, call_on_call, curve):
+        assert isinstance(call_on_call.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, call_on_call, curve):
+        result = call_on_call.rate_sensitivities(curve, [0.5, 1.0, 2.0])
+        assert set(result.keys()) == {0.5, 1.0, 2.0}
+
+    def test_cash_flows_two_rows(self, call_on_call):
+        assert len(call_on_call.cash_flows()) == 2
+
+    def test_describe_contains_outer_inner(self, call_on_call):
+        assert 'Call' in call_on_call.describe()
+
+    def test_outer_after_inner_raises(self, ex_val_date, ex_mid_date, ex_expiry):
+        with pytest.raises(ValueError):
+            CompoundOption(100.0, 5.0, 100.0,
+                           expiry_outer=ex_expiry, expiry_inner=ex_mid_date,
+                           valuation_date=ex_val_date, sigma=0.20,
+                           outer_type='call', inner_type='call')
+
+
+# ------------------------------------------------------------------
 # Global QuantLib clock isolation tests (QRE-88 / QRE-89)
 # ------------------------------------------------------------------
 

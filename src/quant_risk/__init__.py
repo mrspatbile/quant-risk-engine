@@ -8,6 +8,10 @@ from quant_risk.instruments import (
     STANDARD_COUPON_IG,
     STANDARD_COUPON_HY,
     EquityForward,
+    DigitalOption,
+    BarrierOption,
+    ChooserOption,
+    CompoundOption,
 )
 from quant_risk.curves import OISCurve, NSSCurve, ArrayCurve
 from quant_risk.models import (
@@ -32,6 +36,10 @@ __all__ = [
     "STANDARD_COUPON_IG",
     "STANDARD_COUPON_HY",
     "EquityForward",
+    "DigitalOption",
+    "BarrierOption",
+    "ChooserOption",
+    "CompoundOption",
     # curves
     "OISCurve",
     "NSSCurve",
