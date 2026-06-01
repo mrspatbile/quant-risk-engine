@@ -60,6 +60,7 @@ N_PATHS = 200
 N_STEPS = 24   # bi-monthly over 2Y
 T_SIM   = 5.0
 EXP_DATES = np.arange(0.5, 3.0, 0.5)   # 0.5Y, 1.0Y, 1.5Y, 2.0Y, 2.5Y
+MPOR_BASE_DAYS = 10
 
 
 @pytest.fixture(scope="module")
@@ -263,27 +264,27 @@ class TestFVA:
 
 class TestMVA:
     def test_mva_nonnegative(self, engine):
-        assert engine.mva(64.0, 10, 25.0)['MVA'] >= 0
+        assert engine.mva(64.0, 10, 25.0, MPOR_BASE_DAYS)['MVA'] >= 0
 
     def test_mva_keys(self, engine):
-        result = engine.mva(64.0, 10, 25.0)
+        result = engine.mva(64.0, 10, 25.0, MPOR_BASE_DAYS)
         assert {'MVA', 'eim_disc', 'mva_by_period'}.issubset(result)
 
     def test_mva_eim_disc_nonneg(self, engine):
         # Expected initial margin is always non-negative (IM >= 0)
-        assert (engine.mva(64.0, 10, 25.0)['eim_disc'] >= 0).all()
+        assert (engine.mva(64.0, 10, 25.0, MPOR_BASE_DAYS)['eim_disc'] >= 0).all()
 
     def test_mva_scales_with_sqrt_mpor(self, engine):
         # MVA(MPOR=5) ≈ MVA(MPOR=10) / sqrt(2)
-        mva_10 = engine.mva(64.0, 10, 25.0)['MVA']
-        mva_5  = engine.mva(64.0,  5, 25.0)['MVA']
+        mva_10 = engine.mva(64.0, 10, 25.0, MPOR_BASE_DAYS)['MVA']
+        mva_5  = engine.mva(64.0,  5, 25.0, MPOR_BASE_DAYS)['MVA']
         np.testing.assert_allclose(mva_5, mva_10 / np.sqrt(2), rtol=0.01)
 
     def test_mva_zero_spread_is_zero(self, engine):
-        assert engine.mva(64.0, 10, 0.0)['MVA'] == pytest.approx(0.0, abs=1e-10)
+        assert engine.mva(64.0, 10, 0.0, MPOR_BASE_DAYS)['MVA'] == pytest.approx(0.0, abs=1e-10)
 
     def test_mva_zero_rw_is_zero(self, engine):
-        assert engine.mva(0.0, 10, 25.0)['MVA'] == pytest.approx(0.0, abs=1e-10)
+        assert engine.mva(0.0, 10, 25.0, MPOR_BASE_DAYS)['MVA'] == pytest.approx(0.0, abs=1e-10)
 
 
 # ---------------------------------------------------------------------------
@@ -297,19 +298,20 @@ class TestXVA:
             own_cds_spread_bps=45.0, own_recovery=0.40,
             funding_spread_bps=30.0, invest_spread_bps=20.0, csa_type='none',
             risk_weight_bps=64.0, mpor_days=10, im_funding_spread_bps=25.0,
+            mpor_base_days=MPOR_BASE_DAYS,
         )
         assert {'CVA','DVA','BCVA','FVA','FCA','FBA','MVA','total_XVA','details'}.issubset(result)
 
     def test_xva_total_equals_sum(self, engine):
         result = engine.xva(
-            60.0, 0.40, 45.0, 0.40, 30.0, 20.0, 'none', 64.0, 10, 25.0,
+            60.0, 0.40, 45.0, 0.40, 30.0, 20.0, 'none', 64.0, 10, 25.0, MPOR_BASE_DAYS,
         )
         expected = result['CVA'] - result['DVA'] + result['FVA'] + result['MVA']
         np.testing.assert_allclose(result['total_XVA'], expected, rtol=1e-10)
 
     def test_xva_bcva_equals_cva_minus_dva(self, engine):
         result = engine.xva(
-            60.0, 0.40, 45.0, 0.40, 30.0, 20.0, 'none', 64.0, 10, 25.0,
+            60.0, 0.40, 45.0, 0.40, 30.0, 20.0, 'none', 64.0, 10, 25.0, MPOR_BASE_DAYS,
         )
         np.testing.assert_allclose(
             result['BCVA'], result['CVA'] - result['DVA'], rtol=1e-10
@@ -317,7 +319,7 @@ class TestXVA:
 
     def test_xva_two_way_csa_fva_zero(self, engine):
         result = engine.xva(
-            60.0, 0.40, 45.0, 0.40, 30.0, 20.0, 'two_way', 64.0, 10, 25.0,
+            60.0, 0.40, 45.0, 0.40, 30.0, 20.0, 'two_way', 64.0, 10, 25.0, MPOR_BASE_DAYS,
         )
         assert result['FVA'] == 0.0
 
@@ -383,8 +385,8 @@ class TestNetting:
         eng_pay  = XVAEngine(sim, [tr_pay],         exp, kappa, sigma, flat_ois)
         eng_net  = XVAEngine(sim, [tr_pay, tr_rec],  exp, kappa, sigma, flat_ois)
 
-        mva_pay = eng_pay.mva(64.0, 10, 25.0)['MVA']
-        mva_net = eng_net.mva(64.0, 10, 25.0)['MVA']
+        mva_pay = eng_pay.mva(64.0, 10, 25.0, MPOR_BASE_DAYS)['MVA']
+        mva_net = eng_net.mva(64.0, 10, 25.0, MPOR_BASE_DAYS)['MVA']
 
         # Net MVA must be less than single-trade MVA (DV01 partially cancels)
         assert mva_net < mva_pay

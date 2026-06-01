@@ -358,7 +358,7 @@ class XVAEngine:
         risk_weight_bps: float,
         mpor_days: int,
         im_funding_spread_bps: float,
-        mpor_base_days: int = 10,
+        mpor_base_days: int,
     ) -> dict:
         """
         MVA = s_IM Σᵢ Δtᵢ EIM_disc(tᵢ).
@@ -417,6 +417,7 @@ class XVAEngine:
         risk_weight_bps: float,
         mpor_days: int,
         im_funding_spread_bps: float,
+        mpor_base_days: int,
     ) -> dict:
         """
         Full XVA report for the netting set.
@@ -449,7 +450,7 @@ class XVAEngine:
         cva_r = self.cva(cds_spread_bps, recovery)
         dva_r = self.dva(own_cds_spread_bps, own_recovery)
         fva_r = self.fva(funding_spread_bps, invest_spread_bps, csa_type)
-        mva_r = self.mva(risk_weight_bps, mpor_days, im_funding_spread_bps)
+        mva_r = self.mva(risk_weight_bps, mpor_days, im_funding_spread_bps, mpor_base_days)
 
         bcva  = cva_r['CVA'] - dva_r['DVA']
         total = cva_r['CVA'] - dva_r['DVA'] + fva_r['FVA'] + mva_r['MVA']
