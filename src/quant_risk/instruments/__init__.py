@@ -8,6 +8,7 @@ from quant_risk.instruments.cds import (
     STANDARD_COUPON_IG,
     STANDARD_COUPON_HY,
 )
+from quant_risk.instruments.equity_forward import EquityForward
 
 __all__ = [
     "Bond",
@@ -18,4 +19,5 @@ __all__ = [
     "STANDARD_RECOVERY",
     "STANDARD_COUPON_IG",
     "STANDARD_COUPON_HY",
+    "EquityForward",
 ]

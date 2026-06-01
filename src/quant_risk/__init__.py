@@ -7,6 +7,7 @@ from quant_risk.instruments import (
     STANDARD_RECOVERY,
     STANDARD_COUPON_IG,
     STANDARD_COUPON_HY,
+    EquityForward,
 )
 from quant_risk.curves import OISCurve, NSSCurve, ArrayCurve
 from quant_risk.models import (
@@ -30,6 +31,7 @@ __all__ = [
     "STANDARD_RECOVERY",
     "STANDARD_COUPON_IG",
     "STANDARD_COUPON_HY",
+    "EquityForward",
     # curves
     "OISCurve",
     "NSSCurve",

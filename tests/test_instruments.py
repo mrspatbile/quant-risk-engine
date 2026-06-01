@@ -886,6 +886,140 @@ class TestVanillaOption:
 
 
 # ------------------------------------------------------------------
+# EquityForward tests
+# ------------------------------------------------------------------
+
+import QuantLib as ql
+from quant_risk.instruments.equity_forward import EquityForward
+
+@pytest.fixture
+def fwd_val_date():
+    d = ql.Date(24, 3, 2026)
+    ql.Settings.instance().evaluationDate = d
+    return d
+
+@pytest.fixture
+def fwd_mat_date(fwd_val_date):
+    return fwd_val_date + ql.Period(1, ql.Years)
+
+@pytest.fixture
+def eq_fwd(fwd_val_date, fwd_mat_date):
+    return EquityForward(
+        spot           = 100.0,
+        strike         = 103.5,
+        maturity_date  = fwd_mat_date,
+        valuation_date = fwd_val_date,
+        div_yield      = 0.02,
+        notional_      = 1_000_000,
+        long           = True,
+    )
+
+@pytest.fixture
+def eq_fwd_short(fwd_val_date, fwd_mat_date):
+    return EquityForward(
+        spot           = 100.0,
+        strike         = 103.5,
+        maturity_date  = fwd_mat_date,
+        valuation_date = fwd_val_date,
+        div_yield      = 0.02,
+        notional_      = 1_000_000,
+        long           = False,
+    )
+
+
+class TestEquityForward:
+
+    # ── construction ─────────────────────────────────────────────────────────
+
+    def test_describe_contains_long(self, eq_fwd):
+        assert "Long" in eq_fwd.describe()
+
+    def test_describe_contains_short(self, eq_fwd_short):
+        assert "Short" in eq_fwd_short.describe()
+
+    def test_currency_default(self, eq_fwd):
+        assert eq_fwd.currency == 'EUR'
+
+    def test_notional(self, eq_fwd):
+        assert eq_fwd.notional == 1_000_000
+
+    # ── forward price ─────────────────────────────────────────────────────────
+
+    def test_forward_price_above_spot_when_r_gt_q(self, eq_fwd, curve):
+        # r > q → F > S
+        F = eq_fwd.forward_price(curve)
+        assert F > eq_fwd._spot
+
+    def test_forward_price_positive(self, eq_fwd, curve):
+        assert eq_fwd.forward_price(curve) > 0
+
+    def test_forward_price_zero_div_higher(self, fwd_val_date, fwd_mat_date, curve):
+        # higher div_yield reduces forward price
+        fwd_no_div = EquityForward(100.0, 100.0, fwd_mat_date, fwd_val_date, div_yield=0.0)
+        fwd_div    = EquityForward(100.0, 100.0, fwd_mat_date, fwd_val_date, div_yield=0.03)
+        assert fwd_no_div.forward_price(curve) > fwd_div.forward_price(curve)
+
+    # ── npv / price ───────────────────────────────────────────────────────────
+
+    def test_npv_is_float(self, eq_fwd, curve):
+        assert isinstance(eq_fwd.npv(curve), float)
+
+    def test_npv_equals_price(self, eq_fwd, curve):
+        assert eq_fwd.npv(curve) == eq_fwd.price(curve)
+
+    def test_long_short_npv_opposite(self, eq_fwd, eq_fwd_short, curve):
+        assert abs(eq_fwd.npv(curve) + eq_fwd_short.npv(curve)) < 1e-6
+
+    def test_atm_forward_near_zero_npv(self, fwd_val_date, fwd_mat_date, curve):
+        # strike set to fair forward price → NPV ≈ 0
+        dummy = EquityForward(100.0, 100.0, fwd_mat_date, fwd_val_date)
+        F = dummy.forward_price(curve)
+        atm_fwd = EquityForward(100.0, F, fwd_mat_date, fwd_val_date)
+        assert abs(atm_fwd.npv(curve)) < 0.01
+
+    # ── sensitivities ─────────────────────────────────────────────────────────
+
+    def test_dv01_is_float(self, eq_fwd, curve):
+        assert isinstance(eq_fwd.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, eq_fwd, curve):
+        tenors = [0.5, 1.0, 2.0, 5.0]
+        result = eq_fwd.rate_sensitivities(curve, tenors)
+        assert set(result.keys()) == set(tenors)
+
+    def test_rate_sensitivities_concentrated_at_maturity(self, eq_fwd, curve):
+        # maturity is 1Y — sensitivity should be non-zero only at 1.0
+        tenors = [0.5, 1.0, 2.0, 5.0]
+        result = eq_fwd.rate_sensitivities(curve, tenors)
+        assert result[1.0] != 0.0
+        assert result[0.5] == 0.0
+        assert result[2.0] == 0.0
+
+    def test_duration_equals_time_to_maturity(self, eq_fwd, curve):
+        assert abs(eq_fwd.duration(curve) - eq_fwd._T) < 1e-10
+
+    # ── cash flows ────────────────────────────────────────────────────────────
+
+    def test_cash_flows_single_row(self, eq_fwd):
+        assert len(eq_fwd.cash_flows()) == 1
+
+    def test_cash_flows_long_positive_when_itm(self, fwd_val_date, fwd_mat_date):
+        # spot > strike → indicative cash flow positive for long
+        fwd = EquityForward(110.0, 100.0, fwd_mat_date, fwd_val_date, notional_=1.0)
+        assert fwd.cash_flows()['amount'].iloc[0] > 0
+
+    # ── validation ────────────────────────────────────────────────────────────
+
+    def test_negative_spot_raises(self, fwd_val_date, fwd_mat_date):
+        with pytest.raises(ValueError):
+            EquityForward(-100.0, 100.0, fwd_mat_date, fwd_val_date)
+
+    def test_negative_strike_raises(self, fwd_val_date, fwd_mat_date):
+        with pytest.raises(ValueError):
+            EquityForward(100.0, -100.0, fwd_mat_date, fwd_val_date)
+
+
+# ------------------------------------------------------------------
 # Global QuantLib clock isolation tests (QRE-88 / QRE-89)
 # ------------------------------------------------------------------
 
