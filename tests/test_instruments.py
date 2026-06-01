@@ -56,6 +56,13 @@ class TestBond:
     def test_dv01_positive(self, bund, curve):
         assert bund.dv01(curve) > 0
 
+    def test_npv_is_float(self, bund, curve):
+        assert isinstance(bund.npv(curve), float)
+
+    def test_npv_equals_dirty_price_in_currency(self, bund, curve):
+        p = bund.price(curve)
+        assert bund.npv(curve) == p["dirty_price"] * bund.notional / 100
+
     def test_z_spread_positive(self, bund, curve):
         # bond priced below OIS theoretical -- positive z-spread
         p = bund.price(curve)
@@ -158,6 +165,12 @@ class TestIRSwap:
         p = swap.price(curve)
         assert abs(p["fixed_leg_npv"] + p["float_leg_npv"] - p["npv"]) < 1
 
+    def test_npv_is_float(self, swap, curve):
+        assert isinstance(swap.npv(curve), float)
+
+    def test_npv_equals_price_npv(self, swap, curve):
+        assert swap.npv(curve) == swap.price(curve)["npv"]
+
     def test_dv01_negative_for_payer(self, swap, curve):
         # payer swap loses value when rates rise
         assert swap.dv01(curve) < 0
@@ -199,7 +212,7 @@ class TestIRSwapValidation:
 # ------------------------------------------------------------------
 
 import QuantLib as ql
-from quant_risk.instruments.cds import CreditDefaultSwap
+from quant_risk.instruments.cds import CreditDefaultSwap, STANDARD_RECOVERY
 
 @pytest.fixture
 def valuation_date():
@@ -263,6 +276,7 @@ class TestCreditDefaultSwap:
             notional_       = 10_000_000,
             par_spread      = 0.0150,
             coupon          = 0.0100,
+            recovery        = STANDARD_RECOVERY,
             protection_buyer = False,
         )
         assert cds_seller.price(curve) < 0
@@ -275,6 +289,7 @@ class TestCreditDefaultSwap:
             notional_      = 10_000_000,
             par_spread     = 0.0100,
             coupon         = 0.0100,
+            recovery       = STANDARD_RECOVERY,
         )
         assert abs(cds_par.price(curve)) < 10_000   # small residual from OIS discounting
 
@@ -295,6 +310,7 @@ class TestCreditDefaultSwap:
             notional_      = 10_000_000,
             par_spread     = 0.0060,   # 60bps < 100bps coupon
             coupon         = 0.0100,
+            recovery       = STANDARD_RECOVERY,
         )
         assert cds_tight.upfront(curve) < 0
 
@@ -302,6 +318,12 @@ class TestCreditDefaultSwap:
         assert cds_flat.puf(curve) > 0   # spread > coupon
 
     # ── sensitivities ─────────────────────────────────────────────────────────
+
+    def test_npv_is_float(self, cds_flat, curve):
+        assert isinstance(cds_flat.npv(curve), float)
+
+    def test_npv_equals_price(self, cds_flat, curve):
+        assert cds_flat.npv(curve) == cds_flat.price(curve)
 
     def test_cs01_positive_for_buyer(self, cds_flat, curve):
         # protection buyer gains when spreads widen
@@ -315,6 +337,7 @@ class TestCreditDefaultSwap:
             notional_        = 10_000_000,
             par_spread       = 0.0150,
             coupon           = 0.0100,
+            recovery         = STANDARD_RECOVERY,
             protection_buyer = False,
         )
         result = cds_seller.cs01(curve, tenors=[5.0])
@@ -475,6 +498,12 @@ class TestFXForward:
         assert 'Exporter' in d
 
     # ── forward rate ──────────────────────────────────────────────────────────
+
+    def test_npv_is_float(self, fwd_inception, curve):
+        assert isinstance(fwd_inception.npv(curve), float)
+
+    def test_npv_equals_price(self, fwd_inception, curve):
+        assert fwd_inception.npv(curve) == fwd_inception.price(curve)
 
     def test_forward_rate_above_spot(self, fwd_inception, curve):
         # USD rates > EUR rates -- forward EUR/USD > spot
@@ -711,6 +740,12 @@ class TestVanillaOption:
         assert 'Put' in put_option.describe()
 
     # ── pricing ───────────────────────────────────────────────────────────────
+
+    def test_npv_is_float(self, call_option, curve):
+        assert isinstance(call_option.npv(curve), float)
+
+    def test_npv_equals_price(self, call_option, curve):
+        assert call_option.npv(curve) == call_option.price(curve)
 
     def test_call_price_positive(self, call_option, curve):
         assert call_option.price(curve) > 0

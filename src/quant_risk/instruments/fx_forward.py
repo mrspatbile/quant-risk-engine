@@ -238,6 +238,10 @@ class FXForward(Instrument):
         """
         return self._T
 
+    def npv(self, curve: DiscountCurve) -> float:
+        """FX forward NPV in domestic currency."""
+        return self.price(curve)
+
     def cash_flows(self) -> pd.DataFrame:
         """
         Single cash flow at maturity -- net settlement in foreign currency units.

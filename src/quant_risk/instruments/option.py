@@ -154,6 +154,10 @@ class VanillaOption(Instrument):
         r           = -np.log(disc_handle.discount(self._expiry_date)) / self._T if self._T > 0 else 0
         return self._bsm_price(r, sigma) * self._notional_
 
+    def npv(self, curve: DiscountCurve) -> float:
+        """Option NPV in currency units."""
+        return self.price(curve)
+
     def dv01(self, curve: DiscountCurve, bump: float = 0.0001) -> float:
         """
         Rho -- change in option price for 1bp shift in risk-free rate.

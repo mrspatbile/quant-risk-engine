@@ -182,6 +182,10 @@ class IRSwap(Instrument):
         dv01     = abs(self.dv01(curve))
         return round(dv01 / (abs(p["fixed_leg_npv"]) * 0.0001), 4)
 
+    def npv(self, curve: DiscountCurve) -> float:
+        """Swap NPV in currency units."""
+        return self.price(curve)["npv"]
+
     def cash_flows(self) -> pd.DataFrame:
         """
         Fixed and floating leg cash flows at inception.

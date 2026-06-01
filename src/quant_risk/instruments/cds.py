@@ -134,8 +134,8 @@ class CreditDefaultSwap(Instrument):
         maturity: ql.Date,
         notional_: float,
         par_spread: float,
-        coupon: float = STANDARD_COUPON_IG,
-        recovery: float = STANDARD_RECOVERY,
+        coupon: float,
+        recovery: float,
         currency_: str = 'EUR',
         protection_buyer: bool = True,
     ) -> 'CreditDefaultSwap':
@@ -172,8 +172,8 @@ class CreditDefaultSwap(Instrument):
         notional_: float,
         market_tenors: list,
         market_spreads: list,
-        coupon: float = STANDARD_COUPON_IG,
-        recovery: float = STANDARD_RECOVERY,
+        coupon: float,
+        recovery: float,
         currency_: str = 'EUR',
         protection_buyer: bool = True,
         disc_handle: Optional[ql.YieldTermStructureHandle] = None,
@@ -290,6 +290,10 @@ class CreditDefaultSwap(Instrument):
         """
         disc_handle = self._disc_handle_from_curve(curve)
         return self._reprice(disc_handle).NPV()
+
+    def npv(self, curve: DiscountCurve) -> float:
+        """CDS NPV in currency units (protection buyer positive by default)."""
+        return self.price(curve)
 
     def dv01(self, curve: DiscountCurve, bump: float = 0.0001) -> float:
         """

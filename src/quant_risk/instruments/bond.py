@@ -159,6 +159,10 @@ class Bond(Instrument):
         """Modified duration in years."""
         return self.price(curve)["duration"]
 
+    def npv(self, curve: DiscountCurve) -> float:
+        """Dirty price in currency units."""
+        return self.price(curve)["dirty_price"] * self._face_value / 100
+
     def cash_flows(self) -> pd.DataFrame:
         """
         Scheduled cash flows with dates, amounts, and type.

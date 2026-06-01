@@ -120,39 +120,60 @@ class Instrument(ABC):
         """
         pass
 
-    def key_rate_dv01(
+    @abstractmethod
+    def npv(self, curve: DiscountCurve) -> float:
+        """
+        Net present value in domestic currency. Always a scalar float.
+
+        Use this for portfolio aggregation, XVA exposure inputs, and any
+        calculation that requires a consistent numeric type across instrument
+        types. price() is left unchanged and may return a dict on some
+        instruments.
+
+        Parameters
+        ----------
+        curve : DiscountCurve
+            Discount curve.
+
+        Returns
+        -------
+        float
+            NPV in currency units.
+        """
+        pass
+
+    def rate_sensitivities(
         self,
         curve: DiscountCurve,
-        tenors: list,
+        tenors: list[float],
         bump: float = 0.0001,
-    ) -> dict:
+    ) -> dict[float, float]:
         """
-        DV01 per tenor vertex.
+        Sensitivity at each caller-specified tenor vertex.
 
         Bumps each pillar rate by `bump` independently and revalues.
         The sum approximates the total DV01 subject to interpolation
         overlap between adjacent vertices.
 
         The caller supplies the vertex list — this library has no opinion
-        on which tenors regulators prescribe. Pass regulatory vertices
-        (FRTB GIRR, CSR-NS, etc.) from the application layer.
+        on which tenors regulators prescribe.
 
         Parameters
         ----------
         curve : DiscountCurve
             Baseline discount curve.
-        tenors : list
-            Vertex maturities in years, e.g. [0.25, 0.5, 1, 2, 5, 10].
+        tenors : list[float]
+            Vertex maturities in years, e.g. [0.25, 0.5, 1.0, 2.0, 5.0, 10.0].
         bump : float
             Rate bump in decimal. Default 0.0001 (1bp).
 
         Returns
         -------
-        dict
-            {tenor_label: dv01_value} in currency units per 1bp.
+        dict[float, float]
+            {tenor_years: sensitivity} in currency units per 1bp.
         """
         raise NotImplementedError(
-            f"{self.__class__.__name__} does not implement key_rate_dv01. "
+            f"{self.__class__.__name__} does not implement rate_sensitivities. "
             "Override this method in the concrete class."
         )
 
