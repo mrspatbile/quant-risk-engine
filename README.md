@@ -1,7 +1,7 @@
 ![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
 ![QuantLib](https://img.shields.io/badge/QuantLib-1.42.1-orange)
 ![Tests](https://github.com/mrspatbile/quant-risk-engine/actions/workflows/test.yml/badge.svg)
-![Tests passing](https://img.shields.io/badge/tests-268%20passing-brightgreen)
+![Tests passing](https://img.shields.io/badge/tests-310%20passing-brightgreen)
 
 # Quant Risk Engine
 
@@ -18,6 +18,46 @@ Fund risk applications consume it from [`manco-risk-mngmt`](https://github.com/m
 
 ---
 
+## Layer Separation
+
+This library has a hard scope boundary. Understanding what belongs here and what
+does not is the most important design constraint in the project.
+
+**What this library owns:**
+
+- Curve construction — yield curve bootstrapping, NSS parametric curves, `ArrayCurve`
+  for downstream injection
+- Instrument pricing — `Bond`, `IRSwap`, `FXForward`, `VanillaOption`, `CreditDefaultSwap`
+- Sensitivities — `npv()`, `dv01()`, `rate_sensitivities()`, `cs01()`, greeks
+- Stochastic models — Vasicek, Hull-White, CIR, GBM, local vol
+- XVA math — CVA, DVA, FVA, MVA under netting sets (`XVAEngine`)
+- Data ingestion — thin API clients for ECB SDW and FRED (no caching, no persistence)
+
+**What this library does not own:**
+
+- Regulatory thresholds and parameters — IRRBB shock sizes, FRTB risk weights, SIMM
+  calibrations are constants defined in the application layer, not here
+- Capital calculations — SA-CVA, FRTB capital charges, ICAAP outputs
+- Reporting — no DataFrames shaped for regulatory templates, no dashboards
+- Visualisation — no `matplotlib`, no plots. This is not a presentation layer.
+  Plots belong in `banking-risk` or `manco-risk-mngmt` where the narrative context
+  exists. A pricing engine notebook answers "is this number right?" with a printed
+  scalar or a small table — not a chart.
+- Persistence — data caching, parquet stores, and history management are the
+  caller's responsibility. The ECB and FRED clients are stateless HTTP wrappers.
+
+**Downstream repos and what they add:**
+
+| Repo | Adds on top of this library |
+|------|-----------------------------|
+| [`banking-risk`](https://github.com/mrspatbile/banking-risk) | IRRBB EVE/NII shock scenarios and SOT thresholds, FRTB SA capital, ICAAP/ILAAP, regulatory reporting |
+| [`manco-risk-mngmt`](https://github.com/mrspatbile/manco-risk-mngmt) | AIFMD II fund liquidity risk, Annex IV reporting, LMT simulation, board risk dashboards |
+
+If a new feature requires knowing a regulatory threshold, a capital formula, or
+produces a chart — it belongs in a downstream repo, not here.
+
+---
+
 ## Scope
 
 | Domain | Status |
@@ -30,7 +70,7 @@ Fund risk applications consume it from [`manco-risk-mngmt`](https://github.com/m
 | XVA — CVA, DVA, FVA, MVA; XVAEngine with netting set | Done |
 | Portfolio management — macro factors, regime detection, factor models | Done |
 | FRTB SA GIRR delta — key rate DV01 at prescribed vertices | Done |
-| Data layer — ECB/FRED date-aware local history store, parquet cache | Done |
+| Data layer — ECB/FRED stateless API clients | Done |
 
 ---
 
@@ -40,9 +80,8 @@ Fund risk applications consume it from [`manco-risk-mngmt`](https://github.com/m
 quant-risk-engine/
 ├── configs/            # market_config.yaml
 ├── data/
-│   ├── cache/          # Parquet history store — ECB (ecb/), FRED (fred/), external/
-│   ├── processed/      # Bootstrapped OIS curves (parquet)
-│   └── raw/
+│   ├── cache/          # Parquet store — external/ (yfinance, FF factors, GPR)
+│   └── raw/            # Gitignored
 ├── docs/
 ├── notebooks/
 │   ├── 01_yield_curves/   # NSS, OIS bootstrapping
@@ -162,10 +201,9 @@ src/quant_risk/
 │   └── nss.py          # NSSCurve — Nelson-Siegel-Svensson, date-aware from_ecb()
 ├── data/
 │   ├── base.py         # CentralBankClient ABC
-│   ├── cache_mixin.py  # CacheMixin — _load/_save/_merge_cache (append-only history store)
-│   ├── ecb.py          # ECBClient — ESTR, NSS, MMSR OIS, FX; date-aware with local store
-│   ├── fed.py          # FedClient — SOFR, US Treasury CMT, FX; date-aware with local store
-│   └── external_store.py  # ExternalStore — yfinance, FF factors, GPR
+│   ├── ecb.py          # ECBClient — ESTR, NSS, MMSR OIS, FX (stateless HTTP wrapper)
+│   ├── fed.py          # FedClient — SOFR, US Treasury CMT, FX (stateless HTTP wrapper)
+│   └── external_store.py  # ExternalStore — yfinance, FF factors, GPR; parquet-cached
 ├── instruments/
 │   ├── base.py         # Instrument ABC
 │   ├── bond.py         # Bond — OIS discounting, z-spread, key rate DV01
@@ -184,7 +222,7 @@ src/quant_risk/
 **Design principles:** abstract base classes, dependency injection, no global state,
 QuantLib global clock managed via context manager.
 
-**Tests:** 268 passing, 1 skipped — no live API calls.
+**Tests:** 310 passing, 1 skipped — no live API calls, all fixtures synthetic.
 
 ---
 
@@ -195,6 +233,18 @@ QuantLib global clock managed via context manager.
 | ECB SDW API | ESTR, NSS parameters, MMSR OIS rates, government rates, FX | Free, no key |
 | FRED API | SOFR, US Treasury CMT, EUR/USD spot | Free, API key required |
 | BCB API | CDI, Selic, spot rates | Free, no key |
+
+---
+
+## Notebook Conventions
+
+Notebooks in this repo demonstrate library usage — they are not analysis documents.
+
+- Output is `print()` or a `pd.DataFrame` displayed inline. No `matplotlib`. No plots.
+- No regulatory thresholds or capital formulas. Those live in `banking-risk`.
+- No data persistence. Notebooks fetch or construct data inline; they do not read
+  from `data/cache/` or `data/processed/`.
+- Cells are short. If a cell is doing more than one thing, it should be two cells.
 
 ---
 
