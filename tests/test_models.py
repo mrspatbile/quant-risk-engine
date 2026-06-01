@@ -29,34 +29,17 @@ import pytest
 
 from quant_risk.curves.ois import OISCurve
 from quant_risk.models.rates import CIRProcess, HullWhiteProcess, VasicekProcess
+from conftest import _flat_ois
 
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
-def _synthetic_ois_data() -> pd.DataFrame:
-    """Flat 2.5% OIS curve across all tenors, synthetic, no API calls."""
-    data = pd.DataFrame(
-        {
-            "years":           [1/12, 2/12, 3/12, 6/12, 9/12,  1.0,  2.0,  3.0,  5.0, 10.0, 15.0],
-            "zero_rate_pct":   [0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025],
-            "discount_factor": [
-                np.exp(-0.025 * t)
-                for t in [1/12, 2/12, 3/12, 6/12, 9/12, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0]
-            ],
-            "valuation_date": ["2026-03-24"] * 11,
-        },
-        index=["1M", "2M", "3M", "6M", "9M", "12M", "2Y", "3Y", "5Y", "10Y", "10Y+"],
-    )
-    data.index.name = "maturity"
-    return data
-
-
 @pytest.fixture
 def flat_curve() -> OISCurve:
     """Flat 2.5% OIS curve for Hull-White calibration tests."""
-    return OISCurve(_synthetic_ois_data())
+    return _flat_ois(0.025)
 
 
 @pytest.fixture
@@ -205,7 +188,7 @@ class TestHullWhiteProcess:
         # With a flat curve at 2.5% and very small sigma, E[r(t)] ≈ 2.5% at all t.
         # Use low sigma to suppress stochastic noise.
         proc = HullWhiteProcess(
-            curve=OISCurve(_synthetic_ois_data()),
+            curve=_flat_ois(0.025),
             kappa=0.1,
             sigma=0.0001,   # near-deterministic
         )

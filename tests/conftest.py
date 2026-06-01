@@ -1,6 +1,25 @@
+import numpy as np
 import pytest
 import pandas as pd
 from quant_risk.curves.ois import OISCurve
+
+_TENORS = [1/12, 2/12, 3/12, 6/12, 9/12, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0]
+_LABELS = ["1M", "2M", "3M", "6M", "9M", "12M", "2Y", "3Y", "5Y", "10Y", "10Y+"]
+
+
+def _flat_ois(rate: float = 0.025) -> OISCurve:
+    """Flat OIS curve at rate (decimal). Shared by test_models and test_xva."""
+    data = pd.DataFrame(
+        {
+            "years":           _TENORS,
+            "zero_rate_pct":   [rate] * len(_TENORS),
+            "discount_factor": [np.exp(-rate * t) for t in _TENORS],
+            "valuation_date":  ["2026-03-24"] * len(_TENORS),
+        },
+        index=_LABELS,
+    )
+    data.index.name = "maturity"
+    return OISCurve(data)
 
 
 def _synthetic_ois_data() -> pd.DataFrame:

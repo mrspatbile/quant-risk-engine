@@ -29,28 +29,12 @@ from quant_risk.curves.ois import OISCurve
 from quant_risk.models.rates import HullWhiteProcess
 from quant_risk.models.simulator import MCSimulator
 from quant_risk.risk.xva import Trade, XVAEngine
+from conftest import _flat_ois
 
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
-
-def _synthetic_flat_ois(rate: float = 0.025) -> OISCurve:
-    """Flat OIS curve at rate (decimal), synthetic, no API calls."""
-    tenors  = [1/12, 2/12, 3/12, 6/12, 9/12, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0]
-    labels  = ["1M","2M","3M","6M","9M","12M","2Y","3Y","5Y","10Y","10Y+"]
-    data = pd.DataFrame(
-        {
-            "years":           tenors,
-            "zero_rate_pct":   [rate] * len(tenors),
-            "discount_factor": [np.exp(-rate * t) for t in tenors],
-            "valuation_date":  ["2026-03-24"] * len(tenors),
-        },
-        index=labels,
-    )
-    data.index.name = "maturity"
-    return OISCurve(data)
-
 
 KAPPA = 0.10
 SIGMA = 0.005   # 0.5%/√yr in decimal
@@ -65,7 +49,7 @@ MPOR_BASE_DAYS = 10
 
 @pytest.fixture(scope="module")
 def flat_ois() -> OISCurve:
-    return _synthetic_flat_ois(RATE)
+    return _flat_ois(RATE)
 
 
 @pytest.fixture(scope="module")
