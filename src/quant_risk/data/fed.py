@@ -1,7 +1,6 @@
 import requests
 import pandas as pd
 from quant_risk.data.base import CentralBankClient
-from quant_risk.data.cache_mixin import CacheMixin
 from quant_risk.logging import get_logger
 
 logger = get_logger(__name__)
@@ -23,7 +22,7 @@ FRED_SERIES = {
 }
 
 
-class FedClient(CacheMixin, CentralBankClient):
+class FedClient(CentralBankClient):
     """
     Client for the St. Louis Fed FRED API.
 
@@ -40,22 +39,16 @@ class FedClient(CacheMixin, CentralBankClient):
     Currency  : USD
     """
 
-    def __init__(self, api_key: str, cache_dir=None) -> None:
+    def __init__(self, api_key: str) -> None:
         """
         Parameters
         ----------
         api_key : str
             Free FRED API key from fred.stlouisfed.org
-        cache_dir : Path or str, optional
-            Override the default cache directory (data/cache/fred/).
         """
         if not api_key:
             raise ValueError("FRED API key must be a non-empty string")
         self.api_key = api_key
-        from pathlib import Path
-        from quant_risk.config import CACHE_DIR
-        self.cache_dir = Path(cache_dir) if cache_dir else CACHE_DIR / "fred"
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
 
     @property
@@ -69,33 +62,18 @@ class FedClient(CacheMixin, CentralBankClient):
     def _get_series(self, series_id: str, last_n: int,
                     date: str | None = None) -> pd.Series:
         """
-        Fetch a single FRED series with local history store.
-
-        On a cache hit (any stored observation on or before date) the API is
-        not called. On a miss, fetches last_n observations up to date from
-        FRED, merges into the local store, and returns the full stored series.
+        Fetch a single FRED series.
 
         Parameters
         ----------
         series_id : str
             FRED series identifier (e.g. 'DGS10').
         last_n : int
-            Observations to fetch on a cache miss.
+            Number of observations to fetch.
         date : str or None
-            Target date as ISO string. If None, always fetches fresh.
+            Target date as ISO string. If given, anchors the fetch to that date
+            via observation_end.
         """
-        cache_name = f"fred_{series_id}"
-
-        # Cache lookup when a specific date is requested
-        if date is not None:
-            cached = self._load_cache(cache_name)
-            if cached is not None:
-                cached.index = pd.to_datetime(cached.index)
-                if not cached.index[cached.index <= pd.Timestamp(date)].empty:
-                    logger.debug("FRED cache hit: %s date=%s", series_id, date)
-                    return cached
-
-        # Cache miss or date=None — fetch fresh from FRED
         params = {
             "series_id": series_id,
             "api_key": self.api_key,
@@ -118,12 +96,9 @@ class FedClient(CacheMixin, CentralBankClient):
             for obs in observations
             if obs["value"] != "."
         }
-        fresh = pd.Series(records, name=series_id).sort_index()
-        logger.info("FRED %s — %d observations fetched", series_id, len(fresh))
-
-        # Merge into local store and return full series
-        merged = self._merge_cache(cache_name, fresh.to_frame())
-        return merged.iloc[:, 0].rename(series_id)
+        series = pd.Series(records, name=series_id).sort_index()
+        logger.info("FRED %s — %d observations fetched", series_id, len(series))
+        return series
 
     def get_overnight_rate(self, last_n: int = 252,
                            date: str | None = None) -> pd.Series:
@@ -225,16 +200,3 @@ class FedClient(CacheMixin, CentralBankClient):
             )
         return self._get_series(series_id, last_n, date=date)
     
-    def get_series(self, name: str):
-        import time
-
-        if name not in FRED_SERIES:
-            raise ValueError(f"{name} not in registry")
-
-        try:
-            series_id = FRED_SERIES[name]
-            return self.client._get_series(series_id)
-
-        except Exception as e:
-            print(f"[WARN] {name} failed: {e}")
-            return pd.Series(dtype=float)
