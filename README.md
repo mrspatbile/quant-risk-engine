@@ -1,7 +1,7 @@
 ![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
 ![QuantLib](https://img.shields.io/badge/QuantLib-1.42.1-orange)
 ![Tests](https://github.com/mrspatbile/quant-risk-engine/actions/workflows/test.yml/badge.svg)
-![Tests passing](https://img.shields.io/badge/tests-310%20passing-brightgreen)
+![Tests passing](https://img.shields.io/badge/tests-435%20passing-brightgreen)
 
 # Quant Risk Engine
 
@@ -222,7 +222,7 @@ src/quant_risk/
 **Design principles:** abstract base classes, dependency injection, no global state,
 QuantLib global clock managed via context manager.
 
-**Tests:** 310 passing, 1 skipped — no live API calls, all fixtures synthetic.
+**Tests:** 435 passing, 1 skipped — no live API calls, all fixtures synthetic.
 
 ---
 

@@ -19,6 +19,8 @@ from quant_risk.instruments import (
     NapoleonOption,
     Accumulator,
     Decumulator,
+    WorstOfOption,
+    BestOfOption,
 )
 from quant_risk.curves import OISCurve, NSSCurve, ArrayCurve
 from quant_risk.models import (
@@ -30,6 +32,7 @@ from quant_risk.models import (
     MCSimulator,
 )
 from quant_risk.data import ECBClient, FedClient, ExternalStore
+from quant_risk.utils import realized_volatility, realized_correlation
 from quant_risk.risk import Trade, XVAEngine
 
 __all__ = [
@@ -54,6 +57,8 @@ __all__ = [
     "NapoleonOption",
     "Accumulator",
     "Decumulator",
+    "WorstOfOption",
+    "BestOfOption",
     # curves
     "OISCurve",
     "NSSCurve",
@@ -65,6 +70,9 @@ __all__ = [
     "GBMProcess",
     "LocalVolProcess",
     "MCSimulator",
+    # calibration utilities
+    "realized_volatility",
+    "realized_correlation",
     # data
     "ECBClient",
     "FedClient",

@@ -1533,6 +1533,141 @@ class TestDecumulator:
 
 
 # ------------------------------------------------------------------
+# Multi-asset exotic options tests (QRE-123)
+# ------------------------------------------------------------------
+
+import pandas as pd
+from quant_risk.instruments.multi_asset import WorstOfOption, BestOfOption
+
+_MA_PATHS = 500   # small for test speed; fixed seed for determinism
+
+
+def _synth_prices(S0, n, seed):
+    rng = np.random.default_rng(seed)
+    r   = (rng.standard_normal(n) * 0.01)
+    prices = S0 * np.exp(np.cumsum(r))
+    prices = np.concatenate([[S0], prices])
+    return pd.Series(prices)
+
+
+class TestWorstOfOption:
+
+    @pytest.fixture
+    def worst_put(self, ex_val_date, ex_expiry):
+        return WorstOfOption.from_rho(
+            spot1=100.0, spot2=100.0, strike=1.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma1=0.20, sigma2=0.25, rho=0.50,
+            option_type='put', notional_=1_000_000,
+            n_paths=_MA_PATHS, seed=1,
+        )
+
+    @pytest.fixture
+    def worst_call(self, ex_val_date, ex_expiry):
+        return WorstOfOption.from_rho(
+            spot1=100.0, spot2=100.0, strike=1.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma1=0.20, sigma2=0.25, rho=0.50,
+            option_type='call', notional_=1_000_000,
+            n_paths=_MA_PATHS, seed=1,
+        )
+
+    def test_npv_positive(self, worst_put, curve):
+        assert worst_put.npv(curve) > 0
+
+    def test_npv_equals_price(self, worst_put, curve):
+        assert worst_put.npv(curve) == worst_put.price(curve)
+
+    def test_rho_stored(self, worst_put):
+        assert worst_put.rho == 0.50
+
+    def test_lower_corr_higher_put_value(self, ex_val_date, ex_expiry, curve):
+        # lower correlation → worst performer is more likely to be bad → higher worst-of put
+        low_rho  = WorstOfOption.from_rho(100.0, 100.0, 1.0, ex_expiry, ex_val_date,
+                                          0.20, 0.25, rho=-0.50, option_type='put',
+                                          n_paths=_MA_PATHS, seed=1)
+        high_rho = WorstOfOption.from_rho(100.0, 100.0, 1.0, ex_expiry, ex_val_date,
+                                          0.20, 0.25, rho=0.80, option_type='put',
+                                          n_paths=_MA_PATHS, seed=1)
+        assert low_rho.npv(curve) > high_rho.npv(curve)
+
+    def test_from_prices_constructs(self, ex_val_date, ex_expiry, curve):
+        p1  = _synth_prices(100.0, 252, seed=10)
+        p2  = _synth_prices(100.0, 252, seed=20)
+        opt = WorstOfOption.from_prices(
+            100.0, 100.0, 1.0, ex_expiry, ex_val_date,
+            0.20, 0.25, prices1=p1, prices2=p2,
+            option_type='put', n_paths=_MA_PATHS, seed=1,
+        )
+        assert -1.0 <= opt.rho <= 1.0
+        assert opt.npv(curve) > 0
+
+    def test_dv01_is_float(self, worst_put, curve):
+        assert isinstance(worst_put.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, worst_put, curve):
+        result = worst_put.rate_sensitivities(curve, [0.5, 1.0, 2.0])
+        assert set(result.keys()) == {0.5, 1.0, 2.0}
+
+    def test_invalid_rho_raises(self, ex_val_date, ex_expiry):
+        with pytest.raises(ValueError):
+            WorstOfOption.from_rho(100.0, 100.0, 1.0, ex_expiry, ex_val_date,
+                                   0.20, 0.25, rho=1.5)
+
+    def test_describe_contains_rho(self, worst_put):
+        assert 'ρ' in worst_put.describe()
+
+
+class TestBestOfOption:
+
+    @pytest.fixture
+    def best_call(self, ex_val_date, ex_expiry):
+        return BestOfOption.from_rho(
+            spot1=100.0, spot2=100.0, strike=1.0,
+            expiry_date=ex_expiry, valuation_date=ex_val_date,
+            sigma1=0.20, sigma2=0.25, rho=0.50,
+            option_type='call', notional_=1_000_000,
+            n_paths=_MA_PATHS, seed=1,
+        )
+
+    def test_npv_positive(self, best_call, curve):
+        assert best_call.npv(curve) > 0
+
+    def test_npv_equals_price(self, best_call, curve):
+        assert best_call.npv(curve) == best_call.price(curve)
+
+    def test_best_above_worst_call(self, best_call, ex_val_date, ex_expiry, curve):
+        worst = WorstOfOption.from_rho(100.0, 100.0, 1.0, ex_expiry, ex_val_date,
+                                       0.20, 0.25, rho=0.50, option_type='call',
+                                       n_paths=_MA_PATHS, seed=1)
+        assert best_call.npv(curve) >= worst.npv(curve)
+
+    def test_from_prices_constructs(self, ex_val_date, ex_expiry, curve):
+        p1  = _synth_prices(100.0, 252, seed=30)
+        p2  = _synth_prices(100.0, 252, seed=40)
+        opt = BestOfOption.from_prices(
+            100.0, 100.0, 1.0, ex_expiry, ex_val_date,
+            0.20, 0.25, prices1=p1, prices2=p2,
+            option_type='call', n_paths=_MA_PATHS, seed=1,
+        )
+        assert -1.0 <= opt.rho <= 1.0
+        assert opt.npv(curve) > 0
+
+    def test_rho_stored(self, best_call):
+        assert best_call.rho == 0.50
+
+    def test_dv01_is_float(self, best_call, curve):
+        assert isinstance(best_call.dv01(curve), float)
+
+    def test_rate_sensitivities_keys(self, best_call, curve):
+        result = best_call.rate_sensitivities(curve, [0.5, 1.0, 2.0])
+        assert set(result.keys()) == {0.5, 1.0, 2.0}
+
+    def test_describe_contains_rho(self, best_call):
+        assert 'ρ' in best_call.describe()
+
+
+# ------------------------------------------------------------------
 # Global QuantLib clock isolation tests (QRE-88 / QRE-89)
 # ------------------------------------------------------------------
 
