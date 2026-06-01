@@ -81,21 +81,22 @@ class VanillaOption(Instrument):
 
     # ── internal BSM analytics ────────────────────────────────────────────────
 
-    def _d1_d2(self, r: float) -> tuple:
-        S, K, T, sig, q = self._spot, self._strike, self._T, self._sigma, self._div_yield
+    def _d1_d2(self, r: float, sigma: float | None = None) -> tuple:
+        sig = sigma if sigma is not None else self._sigma
+        S, K, T, q = self._spot, self._strike, self._T, self._div_yield
         if T <= 0:
             return np.nan, np.nan
         d1 = (np.log(S / K) + (r - q + 0.5 * sig**2) * T) / (sig * np.sqrt(T))
         d2 = d1 - sig * np.sqrt(T)
         return d1, d2
 
-    def _bsm_price(self, r: float) -> float:
-        S, K, T, sig, q = self._spot, self._strike, self._T, self._sigma, self._div_yield
+    def _bsm_price(self, r: float, sigma: float | None = None) -> float:
+        S, K, T, q = self._spot, self._strike, self._T, self._div_yield
         if T <= 0:
             if self._option_type == 'call':
                 return max(S - K, 0.0)
             return max(K - S, 0.0)
-        d1, d2 = self._d1_d2(r)
+        d1, d2 = self._d1_d2(r, sigma)
         if self._option_type == 'call':
             return S * np.exp(-q * T) * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
         return K * np.exp(-r * T) * norm.cdf(-d2) - S * np.exp(-q * T) * norm.cdf(-d1)
@@ -132,16 +133,26 @@ class VanillaOption(Instrument):
     def notional(self) -> float:
         return self._notional_
 
-    def price(self, curve: DiscountCurve) -> float:
+    def price(self, curve: DiscountCurve, sigma: float | None = None) -> float:
         """
-        Option NPV via QuantLib AnalyticEuropeanEngine.
+        Option NPV via Black-Scholes-Merton.
 
-        Returns option price per unit × notional.
-        Positive for long option positions.
+        Parameters
+        ----------
+        curve : DiscountCurve
+            Discount curve for risk-free rate extraction.
+        sigma : float or None
+            Implied volatility override in decimal (e.g. 0.20 for 20%).
+            If None, uses the volatility supplied at construction.
+
+        Returns
+        -------
+        float
+            Option price per unit × notional.
         """
         disc_handle = self._disc_handle_from_curve(curve)
         r           = -np.log(disc_handle.discount(self._expiry_date)) / self._T if self._T > 0 else 0
-        return self._bsm_price(r) * self._notional_
+        return self._bsm_price(r, sigma) * self._notional_
 
     def dv01(self, curve: DiscountCurve, bump: float = 0.0001) -> float:
         """

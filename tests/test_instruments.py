@@ -813,6 +813,29 @@ class TestVanillaOption:
         iv           = call_option.implied_vol(market_price, r=r)
         assert abs(iv - call_option._sigma) < 0.0001
 
+    # ── sigma override ────────────────────────────────────────────────────────
+
+    def test_sigma_override_higher_vol_raises_call_price(self, call_option, curve):
+        base  = call_option.price(curve)
+        high  = call_option.price(curve, sigma=0.30)
+        assert high > base
+
+    def test_sigma_override_lower_vol_lowers_call_price(self, call_option, curve):
+        base = call_option.price(curve)
+        low  = call_option.price(curve, sigma=0.05)
+        assert low < base
+
+    def test_sigma_override_matches_construction_vol(self, call_option, curve):
+        assert call_option.price(curve, sigma=call_option._sigma) == call_option.price(curve)
+
+    def test_sigma_override_none_unchanged(self, call_option, curve):
+        assert call_option.price(curve, sigma=None) == call_option.price(curve)
+
+    def test_sigma_override_does_not_mutate_stored_sigma(self, call_option, curve):
+        original_sigma = call_option._sigma
+        call_option.price(curve, sigma=0.50)
+        assert call_option._sigma == original_sigma
+
     # ── cash flows ────────────────────────────────────────────────────────────
 
     def test_cash_flows_columns(self, call_option):
