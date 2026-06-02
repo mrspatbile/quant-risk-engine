@@ -159,6 +159,29 @@ class ECBClient(CentralBankClient):
             params={"format": "jsondata", "lastNObservations": last_n},
         )
         return self._parse_observations(data) / 100
+    
+    def get_overnight_rate_single_date(self, date: str) -> float:
+        """
+        Get ESTR rate for a specific date.
+        
+        Parameters
+        ----------
+        date : str
+            ISO date string, e.g. '2025-12-31'
+        
+        Returns
+        -------
+        float
+            ESTR rate in decimal (e.g. 0.025 for 2.5%)
+        """
+        data = self._get(
+            dataset="EST",
+            series_key="B.EU000A2X2A25.WT",
+            params={"format": "jsondata", "lastNObservations": 365},
+        )
+        series = self._parse_observations(data) / 100
+        
+        return series.loc[date]
 
     def get_spot_rate(self, maturity: str = "10Y",
                       last_n: int = 252,
@@ -299,3 +322,133 @@ class ECBClient(CentralBankClient):
                 series[tenor] = pd.Series(dtype=float)
 
         return pd.DataFrame(series)
+
+    def get_overnight_rate_by_date(self, date: str = None) -> float | None:
+        """
+        Get ESTR overnight rate for a specific date.
+
+        If the exact date is unavailable, returns None and informs the caller
+        of the most recent available date. Callers decide whether to retry
+        or use a different date.
+
+        Parameters
+        ----------
+        date : str, optional
+            ISO date string (e.g. '2026-06-01'). If None, returns most recent.
+
+        Returns
+        -------
+        float | None
+            ESTR rate in decimal (e.g. 0.025 for 2.5%), or None if exact date
+            unavailable and caller was given the most recent available date.
+        """
+        data = self._get(
+            dataset="EST",
+            series_key="B.EU000A2X2A25.WT",
+            params={
+                "format": "jsondata",
+                "lastNObservations": 365,
+            } if date is None else {
+                "format": "jsondata",
+                "endPeriod": date,
+            },
+        )
+        series = self._parse_observations(data) / 100
+
+        if date is None:
+            # No specific date requested, return most recent
+            return float(series.iloc[-1])
+
+        # Date was requested; check if we got it
+        if date in series.index:
+            return float(series.loc[date])
+
+        # Exact date not available; inform caller
+        most_recent_date = series.index[-1]
+        print(
+            f"Date {date} not available in ECB data. "
+            f"Most recent available: {most_recent_date}"
+        )
+        return None
+
+    def get_ois_par_rates_by_date(self, date: str = None) -> "OISParRates | None":
+        """
+        Get OIS par rates (1M–10Y+) for a specific date.
+
+        All tenors are fetched with the same endPeriod, ensuring they align
+        to a single valuation date. This fixes the legacy issue where
+        different tenors could have different dates.
+
+        If the exact date is unavailable, returns None and informs the caller
+        of the most recent available date.
+
+        Parameters
+        ----------
+        date : str, optional
+            ISO date string (e.g. '2026-06-01'). If None, uses most recent.
+
+        Returns
+        -------
+        OISParRates | None
+            Object with rates dict and valuation_date, or None if exact date
+            unavailable (caller informed of most recent available).
+
+        Raises
+        ------
+        ValueError
+            If any tenor fails to return a value for the resolved date.
+        ConnectionError
+            If ECB API is unreachable.
+        """
+        from quant_risk.curves.models import OISParRates
+
+        series_dict = {}
+        resolved_date = None
+
+        for tenor, bucket in MMSR_OIS_BUCKETS.items():
+            series_key = (
+                f"B.U2._X._Z.S1ZV._Z.O._X.WR._X.{bucket.code}._Z._Z.EUR._Z"
+            )
+
+            data = self._get(
+                dataset="MMSR",
+                series_key=series_key,
+                params={
+                    "format": "jsondata",
+                    "lastNObservations": 1 if date is None else None,
+                    "endPeriod": date,
+                } if date is not None else {
+                    "format": "jsondata",
+                    "lastNObservations": 1,
+                },
+            )
+
+            series = self._parse_observations(data) / 100
+
+            if len(series) == 0:
+                raise ValueError(
+                    f"Tenor {tenor} returned no data for date {date}"
+                )
+
+            # Track the resolved date from the first tenor
+            if resolved_date is None:
+                resolved_date = series.index[-1]
+                # If caller requested a date and we got a different one, inform them
+                if date is not None and resolved_date != date:
+                    print(
+                        f"Date {date} not available in ECB data. "
+                        f"Using most recent: {resolved_date}"
+                    )
+
+            # Verify all tenors resolved to the same date
+            actual_date = series.index[-1]
+            if actual_date != resolved_date:
+                raise ValueError(
+                    f"Tenor {tenor} resolved to {actual_date} "
+                    f"but other tenors resolved to {resolved_date}. "
+                    f"Cannot construct curve with misaligned dates."
+                )
+
+            series_dict[tenor] = float(series.iloc[-1])
+
+        return OISParRates(rates=series_dict, valuation_date=resolved_date)

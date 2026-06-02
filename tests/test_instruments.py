@@ -1815,17 +1815,26 @@ import pandas as pd
 
 def _make_ois_curve(val_date_str: str) -> OISCurve:
     """Synthetic OIS curve at an arbitrary valuation date."""
-    data = pd.DataFrame(
-        {
-            "years":           [1/12, 3/12, 6/12, 1.0, 2.0, 3.0, 5.0, 10.0, 15.0],
-            "zero_rate_pct":   [0.0263, 0.0258, 0.0248, 0.0230, 0.0220, 0.0215, 0.0220, 0.0240, 0.0250],
-            "discount_factor": [0.998, 0.994, 0.988, 0.977, 0.957, 0.937, 0.895, 0.786, 0.690],
-            "valuation_date":  [val_date_str] * 9,
+    from quant_risk.curves.models import OISCurveInput
+
+    rate = 0.025  # Flat rate that converges in bootstrap
+    return OISCurve(OISCurveInput(
+        on_rate=rate,
+        par_rates={
+            "1M": rate,
+            "2M": rate,
+            "3M": rate,
+            "6M": rate,
+            "9M": rate,
+            "12M": rate,
+            "2Y": rate,
+            "3Y": rate,
+            "5Y": rate,
+            "10Y": rate,
+            "10Y+": rate,
         },
-        index=["1M", "3M", "6M", "12M", "2Y", "3Y", "5Y", "10Y", "10Y+"],
-    )
-    data.index.name = "maturity"
-    return OISCurve(data)
+        valuation_date=val_date_str,
+    ))
 
 
 class TestEvalDateIsolation:

@@ -12,6 +12,7 @@ import QuantLib as ql
 from quant_risk.curves.base import DiscountCurve
 from quant_risk.curves.ois import OISCurve
 from quant_risk.curves.nss import NSSCurve
+from quant_risk.curves.models import NSSParameters
 from quant_risk.curves.array_curve import ArrayCurve, curve_from_arrays
 
 
@@ -94,7 +95,16 @@ def nss_params():
 
 @pytest.fixture
 def nss_curve(nss_params):
-    return NSSCurve(nss_params, valuation_date="2026-03-24")
+    params = NSSParameters(
+        beta0=nss_params["beta0"],
+        beta1=nss_params["beta1"],
+        beta2=nss_params["beta2"],
+        beta3=nss_params["beta3"],
+        tau1=nss_params["tau1"],
+        tau2=nss_params["tau2"],
+        valuation_date="2026-03-24",
+    )
+    return NSSCurve(params)
 
 
 class TestNSSCurve:

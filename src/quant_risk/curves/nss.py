@@ -14,6 +14,7 @@ import pandas as pd
 import os
 
 from quant_risk.curves.base import DiscountCurve
+from quant_risk.curves.models import NSSParameters
 
 
 class NSSCurve(DiscountCurve):
@@ -36,29 +37,31 @@ class NSSCurve(DiscountCurve):
     ------------
     NSSCurve.from_ecb()           -- fetch live AAA parameters from ECB
     NSSCurve.from_ecb(rating='ALL') -- fetch all-issuers parameters
-    NSSCurve.from_processed()     -- load latest saved curve
-    NSSCurve(params)              -- construct from a parameter dict or Series
+    NSSCurve(params)              -- construct from NSSParameters dataclass
 
     Day count : ACT/365 (government bonds)
     Currency  : EUR
     """
 
-    def __init__(self, params: dict | pd.Series, valuation_date: str = ""):
+    def __init__(self, params: NSSParameters):
         """
+        Construct NSS curve from validated parameters.
+
         Parameters
         ----------
-        params : dict or pd.Series
-            Must contain keys: beta0, beta1, beta2, beta3, tau1, tau2.
-        valuation_date : str
-            ISO date string. Example: '2026-03-24'.
+        params : NSSParameters
+            Frozen dataclass containing NSS parameters (beta0–3, tau1–2)
+            and optional valuation_date. All validation happens in
+            NSSParameters.__post_init__.
         """
-        self._beta0 = float(params["beta0"])
-        self._beta1 = float(params["beta1"])
-        self._beta2 = float(params["beta2"])
-        self._beta3 = float(params["beta3"])
-        self._tau1  = float(params["tau1"])
-        self._tau2  = float(params["tau2"])
-        self._valuation_date = str(valuation_date)
+        self._params = params
+        self._beta0 = float(params.beta0)
+        self._beta1 = float(params.beta1)
+        self._beta2 = float(params.beta2)
+        self._beta3 = float(params.beta3)
+        self._tau1 = float(params.tau1)
+        self._tau2 = float(params.tau2)
+        self._valuation_date = str(params.valuation_date)
 
     # ------------------------------------------------------------------
     # DiscountCurve interface
@@ -173,21 +176,19 @@ class NSSCurve(DiscountCurve):
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_ecb(cls, rating: str = "AAA", last_n: int = 10, date: str = None) -> "NSSCurve":
+    def from_ecb(cls, rating: str = "AAA", date: str = None) -> "NSSCurve":
         """
         Fetch NSS parameters from ECB SDW and construct curve.
 
         Parameters
         ----------
         rating : str
-            'AAA' (ECB AAA-rated issuers) or 'ALL' (all issuers). Default 'AAA'.
-        last_n : int
-            Number of most recent parameter sets to fetch from ECB.
-            Default 10 (increased from 1 to provide more date fallback options).
-        date : str or None
-            Target valuation date as ISO string. If None, uses the most recent
-            available date. Falls back to the most recent date <= target if
-            exact match not found. Example: '2026-03-24'.
+            'AAA' (ECB AAA-rated issuers, default) or 'ALL' (all issuers).
+        date : str, optional
+            Target valuation date as ISO string (e.g. '2026-03-24').
+            If None, uses the most recent available date.
+            If exact date unavailable, falls back to most recent prior date
+            with user notification.
 
         Returns
         -------
@@ -197,52 +198,24 @@ class NSSCurve(DiscountCurve):
         Raises
         ------
         ValueError
-            If no data available on or before the target date.
+            If no data available for the requested date.
         """
         from quant_risk.data.ecb import ECBClient
+
         client = ECBClient()
-        params = client.get_nss_parameters(last_n=last_n, rating=rating, date=date)
-        row, val_date = cls._select_params_row(params, date)
-        return cls(row, valuation_date=val_date)
+        params_df = client.get_nss_parameters(last_n=60, rating=rating, date=date)
+        row, val_date = cls._select_params_row(params_df, date)
 
-    @classmethod
-    def from_processed(cls, rating: str = "AAA",
-                       processed_dir: str = None) -> "NSSCurve":
-        """
-        Load the most recent saved NSS curve from data/processed/.
-
-        Parameters
-        ----------
-        rating : str
-            'AAA' or 'ALL'.
-        processed_dir : str, optional
-            Path to data/processed/. Resolved from project root if None.
-
-        Returns
-        -------
-        NSSCurve
-        """
-        if processed_dir is None:
-            processed_dir = cls._find_processed_dir()
-
-        prefix = "nss_aaa_curve_" if rating == "AAA" else "nss_all_curve_"
-        files  = sorted([
-            f for f in os.listdir(processed_dir)
-            if f.startswith(prefix) and f.endswith(".csv")
-        ])
-        if not files:
-            raise FileNotFoundError(
-                f"No NSS {rating} curve file found in data/processed/. "
-                f"Run notebook 02_bootstrapping_ois.ipynb first."
-            )
-        path = os.path.join(processed_dir, files[-1])
-        data = pd.read_csv(path, index_col="maturity")
-
-        valuation_date = data["valuation_date"].iloc[0]
-
-        # reconstruct parameters by fitting NSS to saved zero rates
-        # use ECB API directly for parameters -- more reliable
-        return cls.from_ecb(rating=rating)
+        nss_params = NSSParameters(
+            beta0=float(row["beta0"]),
+            beta1=float(row["beta1"]),
+            beta2=float(row["beta2"]),
+            beta3=float(row["beta3"]),
+            tau1=float(row["tau1"]),
+            tau2=float(row["tau2"]),
+            valuation_date=val_date,
+        )
+        return cls(nss_params)
 
     # ------------------------------------------------------------------
     # private helpers
