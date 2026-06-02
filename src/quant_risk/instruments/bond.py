@@ -243,26 +243,28 @@ class Bond(Instrument):
             Z-spread in basis points.
         """
         val_date = self._valuation_date(curve)
-        ql.Settings.instance().evaluationDate = val_date
 
-        dates, rates = self._curve_pillars(curve, val_date)
-        zc           = self._build_zc(dates, rates)
+        def _impl():
+            dates, rates = self._curve_pillars(curve, val_date)
+            zc           = self._build_zc(dates, rates)
 
-        engine = ql.DiscountingBondEngine(ql.YieldTermStructureHandle(zc))
-        self._ql_bond.setPricingEngine(engine)
+            engine = ql.DiscountingBondEngine(ql.YieldTermStructureHandle(zc))
+            self._ql_bond.setPricingEngine(engine)
 
-        bond_price = ql.BondPrice(market_clean_price, ql.BondPrice.Clean)
+            bond_price = ql.BondPrice(market_clean_price, ql.BondPrice.Clean)
 
-        z = ql.BondFunctions.zSpread(
-            self._ql_bond,
-            bond_price,
-            zc,
-            self._day_count,
-            ql.Compounded,
-            ql.Annual,
-            self._ql_bond.settlementDate(),
-        )
-        return round(z * 10000, 4)
+            z = ql.BondFunctions.zSpread(
+                self._ql_bond,
+                bond_price,
+                zc,
+                self._day_count,
+                ql.Compounded,
+                ql.Annual,
+                self._ql_bond.settlementDate(),
+            )
+            return round(z * 10000, 4)
+
+        return self._with_eval_date(val_date, _impl)
 
     def describe(self) -> str:
         return (
@@ -330,9 +332,11 @@ class Bond(Instrument):
     def _build_engine(
         self, curve: DiscountCurve
     ) -> ql.DiscountingBondEngine:
-        """Build pricing engine from discount curve."""
+        """Build pricing engine from discount curve.
+
+        Assumes caller has set ql.Settings.instance().evaluationDate via _with_eval_date().
+        """
         val_date = self._valuation_date(curve)
-        ql.Settings.instance().evaluationDate = val_date
         dates, rates = self._curve_pillars(curve, val_date)
         zc           = self._build_zc(dates, rates)
         return ql.DiscountingBondEngine(ql.YieldTermStructureHandle(zc))
