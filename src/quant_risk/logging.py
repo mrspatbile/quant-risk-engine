@@ -13,7 +13,7 @@ Usage (application code -- scripts, entry points)
 from quant_risk.logging import configure_file_logging
 configure_file_logging()   # call once at startup
 
-All quant_risk.* loggers write to logs/fund_liquidity.log with automatic
+All quant_risk.* loggers write to logs/quant_risk.log with automatic
 rotation at 5 MB, keeping 3 backup files (20 MB total cap).
 """
 
@@ -21,7 +21,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from quant_risk.config import LOGS_DIR
 
-_LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s — %(message)s"
+_LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s - %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -45,7 +45,7 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def configure_file_logging(
-    filename: str = "fund_liquidity.log",
+    filename: str = "quant_risk.log",
     level: int = logging.DEBUG,
     max_bytes: int = 5 * 1024 * 1024,
     backup_count: int = 3,
