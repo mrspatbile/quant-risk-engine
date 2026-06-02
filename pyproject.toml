@@ -4,29 +4,38 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quant-risk"
-version = "0.1.0"
+version = "0.3.0"
 requires-python = ">=3.13"
 dependencies = [
+    # core pricing engine — what src/quant_risk/ actually imports
     "numpy",
     "scipy",
     "pandas",
-    "matplotlib",
-    "plotly",
-    "jupyterlab",
-    "ipykernel",
+    "QuantLib",
     "requests",
+    "python-dotenv",
+    "python-json-logger",
     "pyyaml",
+    # data layer (ExternalStore — yfinance, FF factors, GPR)
     "yfinance",
     "pandas-datareader",
-    "QuantLib",
-    "python-dotenv",
+    "pyarrow",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+notebook = [
+    # notebook tooling — not needed to use the library
+    "jupyterlab",
+    "ipykernel",
+    "matplotlib",
+    "plotly",
     "seaborn",
     "scikit-learn",
-    "pyarrow",
-    "python-json-logger",
 ]
-[project.optional-dependencies]
-dev = ["pytest", "pytest-cov"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
