@@ -18,7 +18,7 @@ Abstract base classes throughout. Dependency injection. QuantLib evaluation date
 
 ## Curves
 
-`OISCurve` bootstraps from overnight and par rates across three maturity zones, currently sourced from ECB SDW, swappable to any equivalent input. `NSSCurve` fits the Nelson-Siegel-Svensson model from ECB parameters. `ArrayCurve` builds from any externally supplied zero rates.
+`OISCurve` bootstraps from overnight and par rates across three maturity zones, currently sourced from ECB SDW, easily changed to any equivalent input. `NSSCurve` fits the Nelson-Siegel-Svensson model from ECB parameters. `ArrayCurve` builds from any externally supplied zero rates.
 
 All three expose the same interface: discount factors, forward rates, and zero rate projection at arbitrary maturities. Used internally by the pricing layer, but also useful standalone for sensitivity analysis and regulatory scenario work: pass any set of tenors and get back interpolated zero rates instantly, ready to apply prescribed shocks.
 
