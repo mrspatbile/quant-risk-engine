@@ -12,18 +12,11 @@ models, Monte Carlo simulation, and XVA (CVA, DVA, FVA, MVA).
 
 The library under `src/quant_risk/` is the core infrastructure: production-quality
 implementations of curves, instruments, models, and risk metrics, built on QuantLib
-and real market data sources. The notebooks consume this infrastructure — they derive
-the mathematics, walk through the implementation, and demonstrate the full
-computation chain from market data ingestion to pricing output. They are worked
-examples of a real system, not standalone scripts.
+and real market data sources.
 
 This is a **pricing and modelling library**. Regulatory applications that consume
 it live in separate repos:
 - `banking-risk` — IRRBB, FRTB SA, ICAAP (banking regulatory applications)
-- `manco-risk-mngmt` — AIFMD II fund liquidity risk (fund management applications)
-
-Regulatory accuracy is non-negotiable. A wrong number here is not just a bug — it
-can be a reportable compliance incident.
 
 ---
 
@@ -41,39 +34,34 @@ can be a reportable compliance incident.
 
 quant-risk-engine/
 ├── data/
-│   ├── cache/              # Parquet cache — ECB (data/cache/ecb/), FRED (data/cache/fred/),
-│   │   │                   # yfinance, FF factors, GPR (data/cache/external/)
+│   ├── cache/              # Legacy local cache dir. Not written to by the library since
+│   │   │                   # QRE-133 — CacheMixin was removed; caching now lives in
+│   │   │                   # manco-risk-mngmt. Data clients are stateless, live-fetch only.
 │   ├── processed/          # Bootstrapped OIS curves (parquet)
 │   └── raw/                # Gitignored
-├── docs/                   # Regulatory reference documents (not executable)
-├── notebooks/
-│   ├── 01_yield_curves/    # NSS, OIS bootstrapping (nb03 IRRBB moving to banking-risk)
-│   ├── 02_asset_pricing/   # Bonds, swaps, FX forwards, options, CDS, callable bonds
-│   ├── 03_simulations/     # Vasicek, Hull-White, CIR, MC, XVA (complete)
-│   ├── 04_bank_risk/       # Reference docs
-│   └── 06_portfolio_management/
 ├── configs/                # market_config.yaml
 ├── src/quant_risk/
 │   ├── config.py           # Env vars, path constants — imported everywhere
+│   ├── logging.py          # get_logger() — shared logger factory
 │   ├── setup.py            # Notebook setup helpers (base, asset_pricing, macro variants)
-│   ├── curves/             # OISCurve, NSSCurve — QuantLib wrappers
-│   │   └── base.py         # DiscountCurve ABC — includes _select_params_row()
-│   ├── data/               # ECBClient, FedClient — CacheMixin-backed, date-aware
-│   │   └── cache_mixin.py  # CacheMixin — _load_cache, _save_cache, _merge_cache
-│   ├── instruments/        # Bond, IRSwap, FXForward, VanillaOption, CDS
+│   ├── curves/             # OISCurve, NSSCurve, ArrayCurve — QuantLib wrappers
+│   │   ├── base.py         # DiscountCurve ABC — includes _select_params_row()
+│   │   └── models.py       # OISParRates, OISCurveInput, NSSParameters (input dataclasses)
+│   ├── data/               # ECBClient, FedClient, ExternalDataClient — stateless, live-fetch
+│   │   └── base.py         # CentralBankClient ABC
+│   ├── instruments/        # Bond, IRSwap, FXForward, VanillaOption, CreditDefaultSwap,
+│   │   │                   # EquityForward, TotalReturnSwap, exotics (Digital/Barrier/
+│   │   │                   # Chooser/Compound, Asian/Lookback/Cliquet/Shout/Napoleon/
+│   │   │                   # Accumulator/Decumulator), WorstOf/BestOf
+│   │   └── base.py         # Instrument ABC
 │   ├── models/             # VasicekProcess, HullWhiteProcess, CIRProcess, MCSimulator
 │   │   ├── rates.py        # Short rate processes
 │   │   ├── equity.py       # GBMProcess, LocalVolProcess
 │   │   └── simulator.py    # MCSimulator — path generation, exposure profiles, SDF
 │   ├── risk/               # XVAEngine, Trade
 │   │   └── xva.py          # CVA, DVA, FVA, MVA under netting set
-│   └── utils/              # Empty placeholder
-└── tests/                  # Pytest unit tests — 268 passing, no live API calls
-
-
-The following source files exist but are empty placeholders:
-`data/ecb_registry.py`, `data/ecb_store.py`, `data/fed_registry.py`, `data/fed_store.py`,
-`utils/__init__.py`.
+│   └── utils/              # realized_volatility, realized_correlation (calibration.py)
+└── tests/                  # Pytest unit tests — 460 passing, 1 skipped, no live API calls
 
 ---
 
@@ -133,9 +121,11 @@ directly. `from_processed()` reads from `data/processed/` and requires no API ca
 **No notebook logic in `src/`.** Notebooks are for exploration and demonstration.
 Business logic belongs in `src/quant_risk/`.
 
-**`ExternalStore` is not a `CentralBankClient`.** It is a standalone class that wraps
-yfinance, Kenneth French factor downloads (FF5 + MOM, daily and monthly), and the GPR
-index. It uses `CacheMixin` and stores parquet files under `data/cache/external/`.
+**`ExternalDataClient` is not a `CentralBankClient`.** It is a standalone, stateless
+class that wraps yfinance, Kenneth French factor downloads (FF5 + MOM, daily and
+monthly), and the GPR index. As of QRE-133 it does not cache — every call is a live
+fetch. It was renamed from `ExternalStore` in v0.3.0; importing `ExternalStore` now
+raises an `ImportError` with a migration message (removed entirely in v0.4.0).
 
 ---
 
@@ -158,18 +148,18 @@ stale evaluation date is the highest hidden correctness risk in the codebase.
 - PEP 8 throughout.
 - Type hints on all public functions and methods.
 - Docstrings on all public classes and functions. Where a parameter has a
-  non-obvious convention (rates in percent, basis in bps), state it explicitly.
+  non-obvious convention (rates in decimal, basis in bps), state it explicitly.
 - No new dependencies without flagging first.
 
 ---
 
 ## Data conventions
 
-**Rate convention: percent throughout.** `coupon_rate=2.60` means 2.60%, not 0.026.
-`zero_rate()` returns percent. `forward_rate()` returns percent. Values are divided
-by 100 only when passed into QuantLib internals. Document this in every docstring
-where a rate parameter appears — the percent/decimal ambiguity is a silent pricing
-risk with real data.
+**Rate convention: decimal throughout internal computation.** `coupon_rate=0.026`
+means 2.6%. `zero_rate()` returns decimal (e.g. 0.025 for 2.5%). `forward_rate()`
+returns decimal. QuantLib internals also work in decimal — no conversion needed.
+Document units in every docstring where a rate parameter appears — the
+percent/decimal ambiguity is a silent pricing risk with real data.
 
 **Basis spreads:** in basis points (bps). `basis_bps=-20.0` means −20bps cross-currency
 basis. Divided by 10000 before use.
@@ -180,9 +170,11 @@ ISO → `ql.Date` conversion.
 
 **Notional:** base currency units, no implicit scaling.
 
-**Caching:** parquet files under `data/cache/`. `CacheMixin` handles serialisation.
-Single-column data is stored as a one-column DataFrame and returned as a `pd.Series`
-with the original name preserved. Never commit cached or processed data.
+**Caching:** removed from the library in QRE-133. `ECBClient`, `FedClient`, and
+`ExternalDataClient` are stateless — every call is a live fetch, no local
+persistence. `CacheMixin` was deleted from `src/`; caching now lives in
+`manco-risk-mngmt`. `data/cache/` is a legacy directory, not written to by current
+code. Never commit cached or processed data.
 
 **`Bond._curve_pillars()`** extracts pillars up to 15Y. Bonds with maturities beyond
 15Y use `enableExtrapolation()` on the zero curve. Be aware of this when building
@@ -194,13 +186,13 @@ very long-dated instruments.
 
 - Tests live in `tests/`. Run with `pytest tests/ -v`.
 - Do not confuse with `scripts/` — those make live API calls and are not pytest tests.
-- 184+ tests currently passing. Do not break them.
+- 460 tests currently passing (1 skipped). Do not break them.
 - New functionality needs tests before or alongside the implementation, not after.
 - Tests must not depend on live API calls. Use fixtures or synthetic data.
-- Tests must not depend on files in `data/processed/` or `data/cache/`. The current
-  test suite uses `OISCurve.from_processed()` as a shared fixture — this is a known
-  fragility (clean checkout will fail). When adding new tests, build curves
-  synthetically in the fixture rather than extending this pattern.
+- Tests must not depend on files in `data/processed/` or `data/cache/`. All curve
+  fixtures are synthetic (`conftest.py` `curve`, `test_xva.py` `flat_ois`,
+  `test_instruments.py` `_make_ois_curve`). Keep this pattern — never use
+  `from_processed()` or `from_ecb()` in tests.
 
 ---
 
@@ -216,11 +208,19 @@ Sprints 1–6 complete. The library is feature-complete for its core scope.
 
 **Infrastructure delivered alongside Sprint 6:**
 - `DiscountCurve._select_params_row()` — shared date selection for all curve subclasses
-- `CacheMixin._merge_cache()` — append-only local history store (sort, deduplicate)
-- `ECBClient` and `FedClient` are now `CacheMixin`-backed with date-aware fetching:
+- `CacheMixin._merge_cache()` — append-only local history store (sort, deduplicate).
+  Superseded by QRE-133 below — kept here as history, not current architecture.
+- `ECBClient` and `FedClient` were `CacheMixin`-backed with date-aware fetching:
   cache hit on exact date, ECB/FRED fetch with `endPeriod` on miss
 - `OISCurve.from_processed()` prefers parquet over legacy CSV
 - `NSSCurve.from_ecb(date=X)` passes date through to ECB query correctly
+
+**QRE-133 delivered:**
+- `ExternalStore` renamed to `ExternalDataClient`; `ExternalStore` import now raises
+  a migration `ImportError`, to be removed in v0.4.0
+- `CacheMixin` removed from `src/` — caching moved to `manco-risk-mngmt`.
+  `ECBClient`, `FedClient`, `ExternalDataClient` are now stateless, live-fetch only
+  (see [Caching](#data-conventions))
 
 **Current focus:**
 - Repo restructure: banking regulatory applications moving to `banking-risk` repo

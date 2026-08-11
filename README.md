@@ -32,7 +32,7 @@ Instruments are constructed from their contractual characteristics and priced by
 
 Priced analytically from a curve. No simulation required.
 
-`Bond`, `IRSwap`, `FXForward`, `EquityForward`, `TotalReturnSwap`, `VanillaOption`.
+- `Bond`, `IRSwap`, `FXForward`, `EquityForward`, `TotalReturnSwap`, `VanillaOption`.
 
 ### Credit
 
@@ -77,6 +77,8 @@ XVA is the applied output of the simulation layer: `XVAEngine` computes CVA, DVA
 | ECB SDW | ESTR fixing, MMSR OIS rates, NSS parameters | Free, no key |
 | FRED | SOFR, US Treasury CMT, FX spot rates | Free, API key required |
 | yfinance | Equity prices, ETFs | Free, no key |
+| Kenneth French Data Library | Fama-French 5 factors + momentum, daily/monthly | Free, no key |
+| Matteo Iacoviello | Geopolitical Risk (GPR) Index | Free, no key |
 
 ---
 
